@@ -1,0 +1,168 @@
+import numpy as np
+import matplotlib.pyplot as plt
+from scipy.interpolate import splprep, splev
+import sys
+import os
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..')))
+from Personalized_SA.env.quadrotor import *
+
+def generate_gate_positions(base_positions, variability):
+    num_gates = base_positions.shape[0]
+    random_offsets = (np.random.rand(num_gates, 3) - 0.5) * 2 * variability
+    actual_positions = base_positions + random_offsets
+    return actual_positions
+
+def plan_path(start_pos, gate_positions, end_pos, num_points, degree):
+    waypoints = np.vstack((start_pos, gate_positions, end_pos))
+
+    x = waypoints[:, 0]
+    y = waypoints[:, 1]
+    z = waypoints[:, 2]
+
+    tck, u = splprep([x, y, z], s=0, k=degree)
+
+    u_new = np.linspace(u.min(), u.max(), num_points)
+
+    path_points = splev(u_new, tck)
+    path_array = np.array(path_points).T 
+
+    return path_array
+
+def visualize_path_and_gates(start_pos, end_pos, gate_positions, path, true_path):
+    fig = plt.figure(figsize=(10, 8))
+    ax = fig.add_subplot(111, projection='3d')
+
+    ax.scatter(gate_positions[:, 0], gate_positions[:, 1], gate_positions[:, 2],
+               c='red', marker='s', s=100, label='Gates')
+    for i, pos in enumerate(gate_positions):
+         ax.text(pos[0], pos[1], pos[2] + 0.1, f'Gate {i+1}', color='red') 
+
+    ax.scatter(start_pos[0], start_pos[1], start_pos[2], c='green', marker='o', s=100, label='Start')
+    ax.scatter(end_pos[0], end_pos[1], end_pos[2], c='blue', marker='x', s=100, label='End')
+
+    ax.plot(path[:, 0], path[:, 1], path[:, 2], c='blue', linestyle='-', linewidth=1.5, label='Planned Path')
+    ax.plot(true_path[:, 0], true_path[:, 1], true_path[:, 2], c='red', linestyle='-', linewidth=1.5, label='True Path')
+
+    ax.set_xlabel('X (m)')
+    ax.set_ylabel('Y (m)')
+    ax.set_zlabel('Z (m)')
+    ax.set_title('Drone Path Planning Through Gates')
+
+    all_points = np.vstack((start_pos, end_pos, gate_positions, path))
+    min_coords = np.min(all_points, axis=0) - 0.5
+    max_coords = np.max(all_points, axis=0) + 0.5
+    ax.set_xlim(min_coords[0], max_coords[0])
+    ax.set_ylim(min_coords[1], max_coords[1])
+    ax.set_zlim(min_coords[2], max_coords[2])
+
+    ax.legend()
+
+    plt.grid(True)
+    plt.show()
+
+import torch
+def main():
+    NUM_GATES = 4 
+    START_POS = np.array([0, 0, 1])  
+    END_POS = np.array([10, 0, 1])
+
+    BASE_GATE_POSITIONS = np.array([
+        [2.0, 0.5, 1.5],
+        [4.0, -0.5, 1.0],
+        [6.0, 0.5, 1.5],
+        [8.0, -0.5, 1.0]
+    ])
+
+    GATE_POS_VARIABILITY = np.array([0.3, 0.3, 0.2]) # x, y, z 方向上的最大偏移量
+
+    # 路径生成参数
+    NUM_PATH_POINTS = 5000 # 生成路径点的数量 (离散化程度)
+    SPLINE_DEGREE = 3     # B-样条曲线的次数 (通常用 3 次)
+
+    actual_gate_positions = generate_gate_positions(BASE_GATE_POSITIONS, GATE_POS_VARIABILITY)
+
+    print("--- 本次模拟生成的门位置 ---")
+    for i, pos in enumerate(actual_gate_positions):
+        print(f"门 {i+1}: ({pos[0]:.2f}, {pos[1]:.2f}, {pos[2]:.2f})")
+    print("-" * 28)
+
+    planned_path = plan_path(START_POS, actual_gate_positions, END_POS, NUM_PATH_POINTS, SPLINE_DEGREE)
+
+    DT          = 0.02          # 积分步长  (s)
+    T_HORIZON   = 5         # MPC 预测步数
+
+    quad = Quadrotor_MPC(DT)
+    quad_env = Quadrotor_v0(DT)
+    quad_env.reset()
+
+    n_state, n_ctrl   = quad.s_dim, quad.a_dim
+
+    w_pos, w_vel      = 100., 10.
+    w_quat            = 0.
+    w_act             = 0.001
+    n_batch           = 1
+
+    goal_weights = torch.Tensor([w_pos, w_pos, w_pos,              # 位置
+         w_quat, w_quat, w_quat, w_quat,   # 四元数 (w,x,y,z)
+         w_vel, w_vel, w_vel]            # 速度
+            )
+    ctrl_weights = torch.Tensor([w_act,w_act,w_act,w_act])
+
+    q = torch.cat((
+    goal_weights,
+    ctrl_weights
+    ))
+
+    C = torch.diag(q).unsqueeze(0).unsqueeze(0).repeat(T_HORIZON, n_batch, 1, 1)
+                     
+
+    u_min = torch.tensor([0.0, -2.0, -2.0, -2.0])
+    u_max = torch.tensor([20.0,  2.0,  2.0,  2.0])
+
+    u_lower = u_min.repeat(T_HORIZON, 1, 1)   # (25, 4)
+    u_upper = u_max.repeat(T_HORIZON, 1, 1)   # (25, 4)
+
+    ctrl = mpc.MPC(n_state=n_state,
+            n_ctrl=n_ctrl,
+            T=T_HORIZON,
+            u_lower=u_lower,
+            u_upper=u_upper,
+            lqr_iter=10,
+            grad_method=GradMethods.AUTO_DIFF,
+            exit_unconverged = False,
+            verbose=0)
+    
+    x = torch.zeros(n_state)
+    x[kPosZ] = 1.0 # 注意修改
+    x[kQuatW] = 1.0
+    x = x.unsqueeze(0) 
+    quad_env.set_state(x.squeeze(0).detach().cpu().numpy())
+
+    x_history = []
+    steps = len(planned_path)
+    print("steps:", steps)
+
+    for step in range(steps):
+        print(f"step: {step}")
+        x_goal = torch.zeros(n_state)
+        x_goal[kQuatW]    = 1.0                       # 悬停姿态
+        x_goal[kPosX]    = planned_path[i, 0]        # 目标位置
+        x_goal[kPosY]    = planned_path[i, 1]
+        x_goal[kPosZ]    = planned_path[i, 2]
+
+        px = -torch.sqrt(goal_weights)*x_goal
+        p = torch.cat((px, torch.zeros(n_ctrl)))
+        c = p.unsqueeze(0).repeat(T_HORIZON, n_batch, 1)
+        cost = QuadCost(C, c)  
+
+        _, u_opt, _ = ctrl(x, cost, quad)
+        state = quad_env.run(u_opt[0,0].detach().cpu().numpy())
+        x = torch.tensor(state, dtype=torch.float32).unsqueeze(0)
+        x_history.append(state)
+
+    x_arr = np.stack(x_history)
+
+    visualize_path_and_gates(START_POS, END_POS, actual_gate_positions, planned_path, x_arr)
+
+if __name__ == "__main__":
+    main()
