@@ -1,9 +1,9 @@
-import numpy as np
-import matplotlib.pyplot as plt
-from scipy.interpolate import splprep, splev
 import sys
 import os
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..')))
+import numpy as np
+import matplotlib.pyplot as plt
+from scipy.interpolate import splprep, splev
 from Personalized_SA.env.quadrotor import *
 
 def generate_gate_positions(base_positions, variability):
@@ -76,7 +76,7 @@ def main():
     GATE_POS_VARIABILITY = np.array([0.3, 0.3, 0.2]) # x, y, z 方向上的最大偏移量
 
     # 路径生成参数
-    NUM_PATH_POINTS = 5000 # 生成路径点的数量 (离散化程度)
+    NUM_PATH_POINTS = 1000 # 生成路径点的数量 (离散化程度)
     SPLINE_DEGREE = 3     # B-样条曲线的次数 (通常用 3 次)
 
     actual_gate_positions = generate_gate_positions(BASE_GATE_POSITIONS, GATE_POS_VARIABILITY)
@@ -88,8 +88,8 @@ def main():
 
     planned_path = plan_path(START_POS, actual_gate_positions, END_POS, NUM_PATH_POINTS, SPLINE_DEGREE)
 
-    DT          = 0.02          # 积分步长  (s)
-    T_HORIZON   = 5         # MPC 预测步数
+    DT          = 0.01          # 积分步长  (s)
+    T_HORIZON   = 15         # MPC 预测步数
 
     quad = Quadrotor_MPC(DT)
     quad_env = Quadrotor_v0(DT)
@@ -97,9 +97,9 @@ def main():
 
     n_state, n_ctrl   = quad.s_dim, quad.a_dim
 
-    w_pos, w_vel      = 100., 10.
-    w_quat            = 0.
-    w_act             = 0.001
+    w_pos, w_vel      = 1., 0.001
+    w_quat            = 0.001
+    w_act             = 0.00001
     n_batch           = 1
 
     goal_weights = torch.Tensor([w_pos, w_pos, w_pos,              # 位置
@@ -116,21 +116,11 @@ def main():
     C = torch.diag(q).unsqueeze(0).unsqueeze(0).repeat(T_HORIZON, n_batch, 1, 1)
                      
 
-    u_min = torch.tensor([0.0, -2.0, -2.0, -2.0])
-    u_max = torch.tensor([20.0,  2.0,  2.0,  2.0])
+    u_min = torch.tensor([0.0, -20.0, -20.0, -20.0])
+    u_max = torch.tensor([100.0,  20.0,  20.0,  20.0])
 
     u_lower = u_min.repeat(T_HORIZON, 1, 1)   # (25, 4)
     u_upper = u_max.repeat(T_HORIZON, 1, 1)   # (25, 4)
-
-    ctrl = mpc.MPC(n_state=n_state,
-            n_ctrl=n_ctrl,
-            T=T_HORIZON,
-            u_lower=u_lower,
-            u_upper=u_upper,
-            lqr_iter=10,
-            grad_method=GradMethods.AUTO_DIFF,
-            exit_unconverged = False,
-            verbose=0)
     
     x = torch.zeros(n_state)
     x[kPosZ] = 1.0 # 注意修改
@@ -139,28 +129,52 @@ def main():
     quad_env.set_state(x.squeeze(0).detach().cpu().numpy())
 
     x_history = []
+    action_history = []
     steps = len(planned_path)
     print("steps:", steps)
 
+    u_init = torch.tensor([0.0, 0.0, 0.0, 0.0])
+    u_init = u_init.repeat(T_HORIZON, 1, 1)
+
     for step in range(steps):
         print(f"step: {step}")
+        ctrl = mpc.MPC(n_state=n_state,
+        n_ctrl=n_ctrl,
+        T=T_HORIZON,
+        u_lower=u_lower,
+        u_upper=u_upper,
+        u_init=u_init,
+        lqr_iter=10,
+        grad_method=GradMethods.AUTO_DIFF,
+        exit_unconverged = False,
+        verbose=0)
+        
         x_goal = torch.zeros(n_state)
         x_goal[kQuatW]    = 1.0                       # 悬停姿态
-        x_goal[kPosX]    = planned_path[i, 0]        # 目标位置
-        x_goal[kPosY]    = planned_path[i, 1]
-        x_goal[kPosZ]    = planned_path[i, 2]
+        x_goal[kPosX]    = planned_path[step, 0]        # 目标位置
+        x_goal[kPosY]    = planned_path[step, 1]
+        x_goal[kPosZ]    = planned_path[step, 2]
 
         px = -torch.sqrt(goal_weights)*x_goal
         p = torch.cat((px, torch.zeros(n_ctrl)))
         c = p.unsqueeze(0).repeat(T_HORIZON, n_batch, 1)
-        cost = QuadCost(C, c)  
 
+        cost = QuadCost(C, c)  
         _, u_opt, _ = ctrl(x, cost, quad)
-        state = quad_env.run(u_opt[0,0].detach().cpu().numpy())
+        u_init = u_opt
+        action = u_opt[0,0].detach().cpu().numpy()
+        state = quad_env.run(action)
         x = torch.tensor(state, dtype=torch.float32).unsqueeze(0)
+
         x_history.append(state)
+        action_history.append(action)
 
     x_arr = np.stack(x_history)
+    action_arr = np.stack(action_history)
+    
+    np.save('x_arr.npy', x_arr)
+    np.save('action_arr.npy', action_arr)
+    print("x_arr and action_arr have been saved.")
 
     visualize_path_and_gates(START_POS, END_POS, actual_gate_positions, planned_path, x_arr)
 

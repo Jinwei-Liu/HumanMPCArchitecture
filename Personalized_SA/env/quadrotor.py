@@ -1,3 +1,6 @@
+import sys
+import os
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..')))
 import numpy as np
 from scipy.spatial.transform import Rotation as R
 import torch, torch.nn as nn
@@ -72,7 +75,7 @@ class Quadrotor_v0(object):
         Apply the control command on the quadrotor and transits the system to the next state
         """
         # rk4 int
-        M = 4
+        M = 10
         DT = self._dt / M
         #
         X = self._state
@@ -241,7 +244,7 @@ class Quadrotor_MPC(nn.Module):
 
         dstate = torch.zeros_like(state)
 
-        dstate[:,kPosX:kPosZ+1] = state[:,kVelX:kVelZ+1]
+        dstate[...,kPosX:kPosZ+1] = state[...,kVelX:kVelZ+1]
 
 
         quat = state[...,kQuatW:kQuatZ+1]
@@ -249,14 +252,14 @@ class Quadrotor_MPC(nn.Module):
 
         qw, qx, qy, qz = quat.split(1, dim=-1)
 
-        dstate[:,kQuatW] = 0.5 * ( -wx*qx - wy*qy - wz*qz )
-        dstate[:,kQuatX] = 0.5 * (  wx*qw + wz*qy - wy*qz )
-        dstate[:,kQuatY] = 0.5 * (  wy*qw - wz*qx + wx*qz )
-        dstate[:,kQuatZ] = 0.5 * (  wz*qw + wy*qx - wx*qy )
+        dstate[...,kQuatW] = (0.5 * ( -wx*qx - wy*qy - wz*qz )).squeeze(-1)
+        dstate[...,kQuatX] = (0.5 * (  wx*qw + wz*qy - wy*qz )).squeeze(-1)
+        dstate[...,kQuatY] = (0.5 * (  wy*qw - wz*qx + wx*qz )).squeeze(-1)
+        dstate[...,kQuatZ] = (0.5 * (  wz*qw + wy*qx - wx*qy )).squeeze(-1)
 
-        dstate[:,kVelX] = 2 * ( qw*qy + qx*qz ) * thrust
-        dstate[:,kVelY] = 2 * ( qy*qz - qw*qx ) * thrust
-        dstate[:,kVelZ] = (qw*qw - qx*qx -qy*qy + qz*qz) * thrust - self._gz
+        dstate[...,kVelX] = (2 * ( qw*qy + qx*qz ) * thrust).squeeze(-1)
+        dstate[...,kVelY] = (2 * ( qy*qz - qw*qx ) * thrust).squeeze(-1)
+        dstate[...,kVelZ] = ((qw*qw - qx*qx -qy*qy + qz*qz) * thrust - self._gz).squeeze(-1)
 
         return dstate
 
@@ -266,8 +269,8 @@ import matplotlib.pyplot as plt
 def test_mpc():
     # ------------ 关键超参数 ------------
     DT          = 0.02          # 积分步长  (s)
-    T_HORIZON   = 5         # MPC 预测步数
-    step = 200
+    T_HORIZON   = 50         # MPC 预测步数
+    step = 500
 
     # ---------- 初始化 ----------
     quad = Quadrotor_MPC(DT)
@@ -279,10 +282,11 @@ def test_mpc():
     # ----------- 1. 目标状态 & 权重 -----------------
     x_goal            = torch.zeros(n_state)
     x_goal[kQuatW]    = 1.0                       # 悬停姿态
+    x_goal[kPosX]    = 10.0 
 
-    w_pos, w_vel      = 100., 1.
-    w_quat            = 1.
-    w_act             = 0.001
+    w_pos, w_vel      = 1., 0.001
+    w_quat            = 0.001
+    w_act             = 0.00001
     n_batch           = 1
 
     # ----------- 2. 打包成 C, c --------------------
@@ -321,6 +325,7 @@ def test_mpc():
                    lqr_iter=10,
                    grad_method=GradMethods.AUTO_DIFF,
                    exit_unconverged = False,
+                   eps=1e-2,
                    verbose=0)
 
     # ----------- 4. 主循环 -------------------------
