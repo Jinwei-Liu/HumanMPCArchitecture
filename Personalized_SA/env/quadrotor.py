@@ -88,6 +88,8 @@ class Quadrotor_v0(object):
             X = X + (k1 + 2.0*(k2 + k3) + k4)/6.0
         #
         self._state = X
+        self.set_quaternion()
+    
         return self._state
 
     def _f(self, state, action):
@@ -109,7 +111,6 @@ class Quadrotor_v0(object):
 
         dstate[kVelX] = 2 * ( qw*qy + qx*qz ) * thrust
         dstate[kVelY] = 2 * ( qy*qz - qw*qx ) * thrust
-        # dstate[kVelZ] = (1 - 2*qx*qx - 2*qy*qy) * thrust - self._gz
         dstate[kVelZ] = (qw*qw - qx*qx -qy*qy + qz*qz) * thrust - self._gz
 
         return dstate
@@ -148,6 +149,15 @@ class Quadrotor_v0(object):
         """
         return self._state[kVelX:kVelZ+1]
     
+    def set_quaternion(self,):
+        """
+        Set Quaternion
+        """
+        quat = np.zeros(4)
+        quat = self._state[kQuatW:kQuatZ+1]
+        quat = quat / np.linalg.norm(quat)
+        self._state[kQuatW:kQuatZ+1] = quat
+
     def get_quaternion(self,):
         """
         Retrieve Quaternion
@@ -246,7 +256,6 @@ class Quadrotor_MPC(nn.Module):
 
         dstate[...,kPosX:kPosZ+1] = state[...,kVelX:kVelZ+1]
 
-
         quat = state[...,kQuatW:kQuatZ+1]
         quat = quat / torch.norm(quat, dim=-1, keepdim=True)
 
@@ -262,7 +271,97 @@ class Quadrotor_MPC(nn.Module):
         dstate[...,kVelZ] = ((qw*qw - qx*qx -qy*qy + qz*qz) * thrust - self._gz).squeeze(-1)
 
         return dstate
+    
+    def grad_input(self, X: torch.Tensor, action: torch.Tensor):
+        """
+        Return A_d = d x_{k+1}/d x_k  and  B_d = d x_{k+1}/d u_k
+        Shapes:
+            A_d  [..., s_dim, s_dim]
+            B_d  [..., s_dim, a_dim]
+        """
+        DT = self._dt
+        batch_shape = X.shape[:-1]          # 允许任意批量 / 时间维
 
+        # ---------- 拆分输入 ----------
+        thrust, wx, wy, wz = action.split(1, dim=-1)   # (…,1)
+
+        quat = X[..., kQuatW:kQuatZ+1]
+        quat = quat / torch.norm(quat, dim=-1, keepdim=True)  # 保证单位四元数
+        qw, qx, qy, qz = quat.split(1, dim=-1)         # (…,1)
+
+        # ---------- 连续时间 Jacobian ----------
+        A = X.new_zeros(*batch_shape, self.s_dim, self.s_dim)
+        B = X.new_zeros(*batch_shape, self.s_dim, self.a_dim)
+
+        # ① 位置对速度
+        A[..., kPosX, kVelX] = 1.0
+        A[..., kPosY, kVelY] = 1.0
+        A[..., kPosZ, kVelZ] = 1.0
+
+        # ② 四元数运动学  0.5*q ⊗ [0, ω]
+        A[..., kQuatW, kQuatX] = -0.5 * wx.squeeze(-1)
+        A[..., kQuatW, kQuatY] = -0.5 * wy.squeeze(-1)
+        A[..., kQuatW, kQuatZ] = -0.5 * wz.squeeze(-1)
+
+        A[..., kQuatX, kQuatW] =  0.5 * wx.squeeze(-1)
+        A[..., kQuatX, kQuatY] =  0.5 * wz.squeeze(-1)
+        A[..., kQuatX, kQuatZ] = -0.5 * wy.squeeze(-1)
+
+        A[..., kQuatY, kQuatW] =  0.5 * wy.squeeze(-1)
+        A[..., kQuatY, kQuatX] = -0.5 * wz.squeeze(-1)
+        A[..., kQuatY, kQuatZ] =  0.5 * wx.squeeze(-1)
+
+        A[..., kQuatZ, kQuatW] =  0.5 * wz.squeeze(-1)
+        A[..., kQuatZ, kQuatX] =  0.5 * wy.squeeze(-1)
+        A[..., kQuatZ, kQuatY] = -0.5 * wx.squeeze(-1)
+
+        # ③ 速度对姿态（由 R(q)·e3*T 产生）
+        twoT = 2.0 * thrust.squeeze(-1)
+        # vx 行
+        A[..., kVelX, kQuatW] =  twoT * qy.squeeze(-1)
+        A[..., kVelX, kQuatX] =  twoT * qz.squeeze(-1)
+        A[..., kVelX, kQuatY] =  twoT * qw.squeeze(-1)
+        A[..., kVelX, kQuatZ] =  twoT * qx.squeeze(-1)
+        # vy 行
+        A[..., kVelY, kQuatW] = -twoT * qx.squeeze(-1)
+        A[..., kVelY, kQuatX] = -twoT * qw.squeeze(-1)
+        A[..., kVelY, kQuatY] =  twoT * qz.squeeze(-1)
+        A[..., kVelY, kQuatZ] =  twoT * qy.squeeze(-1)
+        # vz 行
+        A[..., kVelZ, kQuatW] =  2.0 * thrust.squeeze(-1) * qw.squeeze(-1)
+        A[..., kVelZ, kQuatX] = -2.0 * thrust.squeeze(-1) * qx.squeeze(-1)
+        A[..., kVelZ, kQuatY] = -2.0 * thrust.squeeze(-1) * qy.squeeze(-1)
+        A[..., kVelZ, kQuatZ] =  2.0 * thrust.squeeze(-1) * qz.squeeze(-1)
+        
+        # ④ 连续时间 B
+        #    四元数对机体系角速度
+        B[..., kQuatW, 1] = -0.5 * qx.squeeze(-1)
+        B[..., kQuatW, 2] = -0.5 * qy.squeeze(-1)
+        B[..., kQuatW, 3] = -0.5 * qz.squeeze(-1)
+
+        B[..., kQuatX, 1] =  0.5 * qw.squeeze(-1)
+        B[..., kQuatX, 2] = -0.5 * qz.squeeze(-1)
+        B[..., kQuatX, 3] =  0.5 * qy.squeeze(-1)
+
+        B[..., kQuatY, 1] =  0.5 * qz.squeeze(-1)
+        B[..., kQuatY, 2] =  0.5 * qw.squeeze(-1)
+        B[..., kQuatY, 3] = -0.5 * qx.squeeze(-1)
+
+        B[..., kQuatZ, 1] = -0.5 * qy.squeeze(-1)
+        B[..., kQuatZ, 2] =  0.5 * qx.squeeze(-1)
+        B[..., kQuatZ, 3] =  0.5 * qw.squeeze(-1)
+
+        #    速度对推力
+        B[..., kVelX, 0] =  2.0 * (qw*qy + qx*qz).squeeze(-1)
+        B[..., kVelY, 0] = -2.0 * (qw*qx - qy*qz).squeeze(-1)
+        B[..., kVelZ, 0] =  (qw*qw - qx*qx - qy*qy + qz*qz).squeeze(-1)
+
+        # ---------- 离散化 ----------
+        eye = torch.eye(self.s_dim, dtype=X.dtype, device=X.device)
+        eye = eye.expand(*batch_shape, -1, -1)          # 广播到批量
+        A_d = eye + DT * A
+        B_d = DT * B
+        return A_d, B_d
 from mpc import mpc
 from mpc.mpc import QuadCost, GradMethods
 import matplotlib.pyplot as plt

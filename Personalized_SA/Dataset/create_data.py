@@ -67,10 +67,10 @@ def main():
     END_POS = np.array([10, 0, 1])
 
     BASE_GATE_POSITIONS = np.array([
-        [2.0, 0.5, 1.5],
+        [0.0, 0.5, 1.5],
         [4.0, -0.5, 1.0],
         [6.0, 0.5, 1.5],
-        [8.0, -0.5, 1.0]
+        [15.0, -0.5, 1.0]
     ])
 
     GATE_POS_VARIABILITY = np.array([0.3, 0.3, 0.2]) # x, y, z 方向上的最大偏移量
@@ -97,9 +97,9 @@ def main():
 
     n_state, n_ctrl   = quad.s_dim, quad.a_dim
 
-    w_pos, w_vel      = 1., 0.001
-    w_quat            = 0.001
-    w_act             = 0.00001
+    w_pos, w_vel      = 1., 1e-5
+    w_quat            = 1e-5
+    w_act             = 1e-5
     n_batch           = 1
 
     goal_weights = torch.Tensor([w_pos, w_pos, w_pos,              # 位置
@@ -115,9 +115,8 @@ def main():
 
     C = torch.diag(q).unsqueeze(0).unsqueeze(0).repeat(T_HORIZON, n_batch, 1, 1)
                      
-
-    u_min = torch.tensor([0.0, -20.0, -20.0, -20.0])
-    u_max = torch.tensor([100.0,  20.0,  20.0,  20.0])
+    u_min = torch.tensor([0.0, -50.0, -20.0, -20.0])
+    u_max = torch.tensor([100.0,  50.0,  20.0,  20.0])
 
     u_lower = u_min.repeat(T_HORIZON, 1, 1)   # (25, 4)
     u_upper = u_max.repeat(T_HORIZON, 1, 1)   # (25, 4)
@@ -130,6 +129,7 @@ def main():
 
     x_history = []
     action_history = []
+    x_goal_history = []
     steps = len(planned_path)
     print("steps:", steps)
 
@@ -144,9 +144,11 @@ def main():
         u_lower=u_lower,
         u_upper=u_upper,
         u_init=u_init,
+        prev_ctrl=u_init,
         lqr_iter=10,
-        grad_method=GradMethods.AUTO_DIFF,
+        grad_method=GradMethods.ANALYTIC,
         exit_unconverged = False,
+        eps=1,
         verbose=0)
         
         x_goal = torch.zeros(n_state)
@@ -157,6 +159,9 @@ def main():
 
         px = -torch.sqrt(goal_weights)*x_goal
         p = torch.cat((px, torch.zeros(n_ctrl)))
+        # x_aim =  torch.cat((x_goal, torch.tensor([9.81,0,0,0])))
+        # p = -torch.sqrt(q)*x_aim
+
         c = p.unsqueeze(0).repeat(T_HORIZON, n_batch, 1)
 
         cost = QuadCost(C, c)  
@@ -168,15 +173,50 @@ def main():
 
         x_history.append(state)
         action_history.append(action)
+        x_goal_history.append(x_goal.detach().cpu().numpy())
 
     x_arr = np.stack(x_history)
     action_arr = np.stack(action_history)
-    
+    x_goal_arr = np.stack(x_goal_history)
+
     np.save('x_arr.npy', x_arr)
     np.save('action_arr.npy', action_arr)
-    print("x_arr and action_arr have been saved.")
+    np.save('x_goal_arr.npy', x_goal_arr)
 
     visualize_path_and_gates(START_POS, END_POS, actual_gate_positions, planned_path, x_arr)
 
+    fig, axes = plt.subplots(n_state,      # 行数 = 状态维度
+                        1,            # 一列
+                        sharex=True,  # 共用 x 轴
+                        figsize=(6, 1.8*n_state))
+
+    for dim in range(n_state):
+        ax = axes[dim]                    # 当前子图
+        ax.plot(x_arr[:, dim])            # 画出 dim 维
+        ax.plot(x_goal_arr[:, dim])            # 画出 dim 维
+        ax.set_ylabel(f"x[{dim}]")
+        ax.grid(True, linestyle="--", alpha=0.4)
+
+    axes[-1].set_xlabel("Timestep")       # 只在最后一行标注
+    fig.suptitle("Evolution of state vector x", y=1.02)
+    fig.tight_layout()
+    plt.show()
+
+    fig, axes = plt.subplots(n_ctrl,      # 行数 = 控制维度
+                    1,            # 一列
+                    sharex=True,  # 共用 x 轴
+                    figsize=(6, 1.8*n_ctrl))
+
+    for dim in range(n_ctrl):
+        ax = axes[dim]                    # 当前子图
+        ax.plot(action_arr[:, dim])            # 画出 dim 维
+        ax.set_ylabel(f"u[{dim}]")
+        ax.grid(True, linestyle="--", alpha=0.4)
+
+    axes[-1].set_xlabel("Timestep")       # 只在最后一行标注
+    fig.suptitle("Evolution of control vector u", y=1.02)
+    fig.tight_layout()
+    plt.show()
+    
 if __name__ == "__main__":
     main()
