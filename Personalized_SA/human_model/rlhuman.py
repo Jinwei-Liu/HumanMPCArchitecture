@@ -65,13 +65,13 @@ def train(args):
     action_dim = action_low.shape[0]
 
     # SAC hyperparameters
-    hid_shape = (256, 256, 256, 256)
+    hid_shape = (128, 128, 128)
     a_lr = 3e-4
     c_lr = 3e-4
-    batch_size = 256
+    batch_size = 2560
     alpha = 0.2
     adaptive_alpha = True
-    gamma = 0.99
+    gamma = 0.995
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     writer = SummaryWriter(log_dir=args.log_dir)
 
@@ -115,7 +115,9 @@ def train(args):
                 step_idx += 1
 
                 if agent.replay_buffer.size > batch_size:
-                    agent.train(writer=writer, total_steps=total_steps)
+                    if step_idx%10 == 0:
+                        for _ in range(10):
+                            agent.train(writer=writer, total_steps=total_steps)
 
             pbar.set_postfix(episode_reward=f"{ep_reward:.2f}")
             writer.add_scalar("Reward/episode", ep_reward, ep)
@@ -140,13 +142,13 @@ def test(args):
     action_dim = action_low.shape[0]
 
     # SAC hyperparameters (must match those used in training)
-    hid_shape = (128, 128)
+    hid_shape = (128, 128, 128)
     a_lr = 3e-4
     c_lr = 3e-4
     batch_size = 2560
     alpha = 0.2
     adaptive_alpha = True
-    gamma = 0.99
+    gamma = 0.995
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
     # Decide which agent to use for testing
@@ -194,7 +196,7 @@ def test(args):
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
-    parser.add_argument("--episodes", type=int, default=500)
+    parser.add_argument("--episodes", type=int, default=10000)
     parser.add_argument("--log_dir", type=str, default="./Personalized_SA/human_model/runs_quad")
     parser.add_argument("--max_test_steps", type=int, default=2000)
     parser.add_argument("--save_path", type=str, default="./Personalized_SA/human_model/checkpoints/actor.pth")
@@ -202,4 +204,4 @@ if __name__ == "__main__":
     args = parser.parse_args()
 
     train(args)
-    # test(args)
+    # test(args) 
