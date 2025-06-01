@@ -38,10 +38,10 @@ class QuadrotorRaceEnv:
 
         # Reward coefficients
         self.gate_pass_reward   = 100.0
-        self.dist_penalty_scale = 1.0
-        self.vel_penalty_scale  = 0.01
+        self.dist_penalty_scale = 1
+        self.vel_penalty_scale  = 0.001
         self.crash_penalty      = -200.0
-        self.time_penalty       = -0.1
+        self.time_penalty       = -0.01
 
     def reset(self, seed: Optional[int] = None, options: Optional[dict] = None):
         if seed is not None:
@@ -110,8 +110,8 @@ class QuadrotorRaceEnv:
         reward = self.time_penalty
         current_gate = self.gate_positions[self.current_gate_idx]
         dist_to_gate = np.linalg.norm(pos - current_gate)
-        reward -= self.dist_penalty_scale * dist_to_gate
-        reward -= self.vel_penalty_scale * np.linalg.norm(vel)
+        reward += self.dist_penalty_scale * 1.0 / (dist_to_gate + 1)
+        reward += -self.vel_penalty_scale * np.linalg.norm(vel)
 
         if (
             np.any(pos < self.pos_bounds[0]) or
