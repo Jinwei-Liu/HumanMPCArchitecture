@@ -1,5 +1,4 @@
 import argparse
-import gym
 import numpy as np
 import torch
 from torch.utils.tensorboard import SummaryWriter
@@ -18,7 +17,6 @@ def scale_to_env(a_norm: np.ndarray, low: np.ndarray, high: np.ndarray) -> np.nd
     Map an action from [-1, 1] to the environment's action bounds [low, high].
     """
     return low + 0.5 * (a_norm + 1.0) * (high - low)
-
 
 def test_trained_agent(agent: SAC_countinuous,
                        env: QuadrotorRaceEnv,
@@ -98,8 +96,10 @@ def train(args):
             state = obs_dict["human"]
             ep_reward = 0.0
             done = False
+            step_idx = 0
+            max_steps=args.max_test_steps
 
-            while not done:
+            while not done and step_idx < max_steps:
                 # Sample an action in [-1, 1] and scale to environment bounds
                 a_norm = agent.select_action(state, deterministic=False)
                 env_act = scale_to_env(a_norm, action_low, action_high)
@@ -112,6 +112,7 @@ def train(args):
                 state = next_state
                 ep_reward += reward
                 total_steps += 1
+                step_idx += 1
 
                 if agent.replay_buffer.size > batch_size:
                     agent.train(writer=writer, total_steps=total_steps)
