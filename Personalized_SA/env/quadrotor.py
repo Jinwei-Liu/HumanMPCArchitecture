@@ -25,24 +25,19 @@ class Quadrotor_v0(object):
         
         # Sampling range of the quadrotor's initial position
         self._xyz_dist = np.array(
-            [ [-3.0, -1.0], # x 
-              [-2.0, 2.],   # y
-              [0.0, 2.5]]   # z
+            [ [4.8, 5.2], # x 
+              [-0.2, 0.2],   # y
+              [0.8, 1.2]]   # z
         )
         # Sampling range of the quadrotor's initial velocity
         self._vxyz_dist = np.array(
-            [ [-1.0, 1.0],  # vx
-              [-1.0, 1.0],  # vy
-              [-1.0, 1.0]]  # vz
+            [ [-0.5, 0.5],  # vx
+              [-0.5, 0.5],  # vy
+              [-0.5, 0.5]]  # vz
         )
-        
-        # x, y, z, r, p, y, vx, vy, vz
-        self.obs_low = np.array([-10, -10, -10, -np.pi, -np.pi, -np.pi, -10, -10, -10])
-        self.obs_high = np.array([10, 10, 10, np.pi, np.pi, np.pi, 10, 10, 10])
-        #
+
         self.reset()
-        # self._t = 0.0
-    
+
     def reset(self):
         self._state = np.zeros(shape=self.s_dim)
         self._state[kQuatW] = 1.0 # 
@@ -362,13 +357,14 @@ class Quadrotor_MPC(nn.Module):
         A_d = eye + DT * A
         B_d = DT * B
         return A_d, B_d
+
 from mpc import mpc
 from mpc.mpc import QuadCost, GradMethods
 import matplotlib.pyplot as plt
 def test_mpc():
     # ------------ 关键超参数 ------------
     DT          = 0.02          # 积分步长  (s)
-    T_HORIZON   = 50         # MPC 预测步数
+    T_HORIZON   = 15         # MPC 预测步数
     step = 500
 
     # ---------- 初始化 ----------
@@ -381,11 +377,11 @@ def test_mpc():
     # ----------- 1. 目标状态 & 权重 -----------------
     x_goal            = torch.zeros(n_state)
     x_goal[kQuatW]    = 1.0                       # 悬停姿态
-    x_goal[kPosX]    = 10.0 
+    x_goal[kPosZ]    = 10.0 
 
-    w_pos, w_vel      = 1., 0.001
-    w_quat            = 0.001
-    w_act             = 0.00001
+    w_pos, w_vel      = 1., 1e-3
+    w_quat            = 1e-3
+    w_act             = 1e-5
     n_batch           = 1
 
     # ----------- 2. 打包成 C, c --------------------
@@ -410,27 +406,26 @@ def test_mpc():
     cost = QuadCost(C, c)                         
 
     # ----------- 3. 控制器 -------------------------
-    u_min = torch.tensor([0.0, -2.0, -2.0, -2.0])
-    u_max = torch.tensor([20.0,  2.0,  2.0,  2.0])
+    u_min = torch.tensor([0.0, -20.0, -20.0, -20.0])
+    u_max = torch.tensor([100.0,  20.0,  20.0,  20.0])
 
-    u_lower = u_min.repeat(T_HORIZON, 1, 1)   # (25, 4)
-    u_upper = u_max.repeat(T_HORIZON, 1, 1)   # (25, 4)
+    u_lower = u_min.repeat(T_HORIZON, 1, 1)  
+    u_upper = u_max.repeat(T_HORIZON, 1, 1)  
 
     ctrl = mpc.MPC(n_state=n_state,
                    n_ctrl=n_ctrl,
                    T=T_HORIZON,
                    u_lower=u_lower,
                    u_upper=u_upper,
-                   lqr_iter=10,
+                   lqr_iter=5,
                    grad_method=GradMethods.AUTO_DIFF,
                    exit_unconverged = False,
-                   eps=1e-2,
+                   eps=1e-1,
                    verbose=0)
 
     # ----------- 4. 主循环 -------------------------
     x = torch.zeros(n_state)
     x[kQuatW] = 1.0
-    x[kPosZ] = -1.0
     x = x.unsqueeze(0) 
     quad_env.set_state(x.squeeze(0).detach().cpu().numpy())
 
@@ -456,7 +451,7 @@ def test_mpc():
         ax.set_ylabel(f"x[{dim}]")
         ax.grid(True, linestyle="--", alpha=0.4)
 
-    axes[-1].set_xlabel("Timestep")       # 只在最后一行标注
+    axes[-1].set_xlabel("Timestep")      
     fig.suptitle("Evolution of state vector x", y=1.02)
     fig.tight_layout()
     plt.show()
