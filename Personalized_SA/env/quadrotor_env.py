@@ -22,16 +22,19 @@ class QuadrotorRaceEnv:
         self.observation_dim_human = self.quad.s_dim + 3  # 3 for gate position (x, y, z)
 
         # Gate trajectory parameters
-        self.num_gates = 8
+        self.num_gates = 4
         self.gate_radius = 0.5
         self.current_gate_idx = 0
         t = np.linspace(0, 2 * np.pi, self.num_gates, endpoint=False)
-        self.gate_positions = np.array([
-            10.0 * np.cos(t),
-            10.0 * np.sin(2 * t),
-            1.0 + 0.5 * np.sin(t)
-        ], dtype=np.float32).T
-
+        # self.gate_positions = np.array([
+        #     10.0 * np.cos(t),
+        #     10.0 * np.sin(2 * t),
+        #     1.0 + 0.5 * np.sin(t)
+        # ], dtype=np.float32).T
+        self.gate_positions = np.array([[5.0, 3.0, 2.0],
+                                         [3.0, 6.0, 2.0],
+                                         [5.0, 9.0, 2.0],
+                                         [3.0, 12.0, 2.0]], dtype=np.float32)
         # Safety bounds
         self.pos_bounds = np.array([-20.0, 20.0], dtype=np.float32)
         self.vel_bounds = np.array([-100.0, 100.0], dtype=np.float32)
@@ -161,8 +164,8 @@ def visualize_gates(gate_positions: np.ndarray, gate_radius: float = 0.5):
     for i, (x0, y0, z0) in enumerate(gate_positions):
         # Generate circle points in the horizontal plane (z = z0)
         x_circle = x0 + gate_radius * np.cos(theta)
-        y_circle = y0 + gate_radius * np.sin(theta)
-        z_circle = np.full_like(theta, z0)
+        y_circle = np.full_like(theta, y0)
+        z_circle = z0 + gate_radius * np.sin(theta)
 
         ax.plot(x_circle, y_circle, z_circle, c='blue', linewidth=1.5)
         ax.text(x0, y0, z0 + 0.1, f'Gate {i+1}', color='black')
@@ -171,6 +174,19 @@ def visualize_gates(gate_positions: np.ndarray, gate_radius: float = 0.5):
     ax.set_ylabel('Y (m)')
     ax.set_zlabel('Z (m)')
     ax.set_title('Gate Positions with True Radius')
+
+    max_range = np.array([gate_positions[:, 0].max() - gate_positions[:, 0].min(),
+                          gate_positions[:, 1].max() - gate_positions[:, 1].min(),
+                          gate_positions[:, 2].max() - gate_positions[:, 2].min()]).max()
+
+    mid_x = (gate_positions[:, 0].max() + gate_positions[:, 0].min()) / 2
+    mid_y = (gate_positions[:, 1].max() + gate_positions[:, 1].min()) / 2
+    mid_z = (gate_positions[:, 2].max() + gate_positions[:, 2].min()) / 2
+
+    ax.set_xlim(mid_x - max_range / 2, mid_x + max_range / 2)
+    ax.set_ylim(mid_y - max_range / 2, mid_y + max_range / 2)
+    ax.set_zlim(mid_z - max_range / 2, mid_z + max_range / 2)
+
     ax.legend()
     plt.grid(True)
     plt.show()
