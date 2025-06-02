@@ -110,7 +110,7 @@ class SAC_countinuous():
         for p in self.q_critic_target.parameters():
             p.requires_grad = False
 
-        self.replay_buffer = ReplayBuffer(self.state_dim, self.action_dim, max_size=int(3e7), dvc=self.dvc)
+        self.replay_buffer = ReplayBuffer(self.state_dim, self.action_dim, max_size=int(1e6), dvc=self.dvc)
 
         if self.adaptive_alpha:
             # Target Entropy = −dim(A) (e.g. , -6 for HalfCheetah-v2) as given in the paper

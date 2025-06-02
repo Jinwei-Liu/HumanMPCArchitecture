@@ -65,7 +65,7 @@ def train(args):
     action_dim = action_low.shape[0]
 
     # SAC hyperparameters
-    hid_shape = (128, 128)
+    hid_shape = (256, 256)
     a_lr = 1e-5
     c_lr = 1e-5
     batch_size = 2560
@@ -115,12 +115,13 @@ def train(args):
                 step_idx += 1
 
                 if agent.replay_buffer.size > batch_size:
-                    if step_idx%100 == 1:
+                    if step_idx%50 == 1:
                         for _ in range(10):
                             agent.train(writer=writer, total_steps=total_steps)
 
             pbar.set_postfix(episode_reward=f"{ep_reward:.2f}")
             writer.add_scalar("Reward/episode", ep_reward, ep)
+            writer.add_scalar("Reward/total_steps", ep_reward, total_steps)
 
     # Save the trained actor network
     os.makedirs(os.path.dirname(args.save_path), exist_ok=True)
@@ -197,7 +198,7 @@ def test(args):
 from datetime import datetime
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
-    parser.add_argument("--episodes", type=int, default=5000)
+    parser.add_argument("--episodes", type=int, default=2000)
     parser.add_argument("--log_dir", type=str, default="./Personalized_SA/human_model/runs_quad")
     parser.add_argument("--max_test_steps", type=int, default=2000)
     parser.add_argument("--save_path", type=str, default="./Personalized_SA/human_model/checkpoints/actor.pth")
