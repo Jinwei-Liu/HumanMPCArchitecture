@@ -65,13 +65,13 @@ def train(args):
     action_dim = action_low.shape[0]
 
     # SAC hyperparameters
-    hid_shape = (128, 128, 128)
-    a_lr = 3e-4
-    c_lr = 3e-4
+    hid_shape = (128, 128)
+    a_lr = 1e-5
+    c_lr = 1e-5
     batch_size = 2560
     alpha = 0.2
     adaptive_alpha = True
-    gamma = 0.995
+    gamma = 0.99
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     writer = SummaryWriter(log_dir=args.log_dir)
 
@@ -115,7 +115,7 @@ def train(args):
                 step_idx += 1
 
                 if agent.replay_buffer.size > batch_size:
-                    if step_idx%10 == 0:
+                    if step_idx%100 == 1:
                         for _ in range(10):
                             agent.train(writer=writer, total_steps=total_steps)
 
@@ -142,13 +142,13 @@ def test(args):
     action_dim = action_low.shape[0]
 
     # SAC hyperparameters (must match those used in training)
-    hid_shape = (128, 128, 128)
-    a_lr = 3e-4
-    c_lr = 3e-4
+    hid_shape = (128, 128)
+    a_lr = 1e-5
+    c_lr = 1e-5
     batch_size = 2560
     alpha = 0.2
     adaptive_alpha = True
-    gamma = 0.995
+    gamma = 0.99
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
     # Decide which agent to use for testing
@@ -194,14 +194,17 @@ def test(args):
         true_path=true_path
     )
 
+from datetime import datetime
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
-    parser.add_argument("--episodes", type=int, default=10000)
+    parser.add_argument("--episodes", type=int, default=5000)
     parser.add_argument("--log_dir", type=str, default="./Personalized_SA/human_model/runs_quad")
     parser.add_argument("--max_test_steps", type=int, default=2000)
     parser.add_argument("--save_path", type=str, default="./Personalized_SA/human_model/checkpoints/actor.pth")
     parser.add_argument("--load_model", type=str, default="./Personalized_SA/human_model/checkpoints/actor.pth")
     args = parser.parse_args()
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    args.log_dir = args.log_dir.rstrip("/") + "/" + timestamp
 
     train(args)
     # test(args) 

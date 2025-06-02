@@ -27,13 +27,13 @@ class QuadrotorRaceEnv:
         self.current_gate_idx = 0
         t = np.linspace(0, 2 * np.pi, self.num_gates, endpoint=False)
         self.gate_positions = np.array([
-            5.0 * np.cos(t),
-            2.5 * np.sin(2 * t),
+            10.0 * np.cos(t),
+            10.0 * np.sin(2 * t),
             1.0 + 0.5 * np.sin(t)
         ], dtype=np.float32).T
 
         # Safety bounds
-        self.pos_bounds = np.array([-10.0, 10.0], dtype=np.float32)
+        self.pos_bounds = np.array([-20.0, 20.0], dtype=np.float32)
         self.vel_bounds = np.array([-100.0, 100.0], dtype=np.float32)
 
         # Reward coefficients
@@ -41,7 +41,7 @@ class QuadrotorRaceEnv:
         self.dist_penalty_scale = 1
         self.vel_penalty_scale  = 0.001
         self.crash_penalty      = -200.0
-        self.time_penalty       = -0.01
+        self.time_penalty       = -0.0
 
     def reset(self, seed: Optional[int] = None, options: Optional[dict] = None):
         if seed is not None:
