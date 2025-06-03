@@ -65,9 +65,9 @@ def train(args):
     action_dim = action_low.shape[0]
 
     # SAC hyperparameters
-    hid_shape = (256, 256)
-    a_lr = 1e-4
-    c_lr = 1e-4
+    hid_shape = (128, 128, 128)
+    a_lr = 1e-3
+    c_lr = 1e-3
     batch_size = 2560
     alpha = 0.1
     adaptive_alpha = False
@@ -143,12 +143,12 @@ def test(args):
     action_dim = action_low.shape[0]
 
     # SAC hyperparameters (must match those used in training)
-    hid_shape = (256, 256)
-    a_lr = 1e-5
-    c_lr = 1e-5
+    hid_shape = (128, 128, 128)
+    a_lr = 1e-4
+    c_lr = 1e-4
     batch_size = 2560
-    alpha = 0.2
-    adaptive_alpha = True
+    alpha = 0.1
+    adaptive_alpha = False
     gamma = 0.99
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
@@ -198,7 +198,7 @@ def test(args):
 from datetime import datetime
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
-    parser.add_argument("--episodes", type=int, default=5000)
+    parser.add_argument("--episodes", type=int, default=1000)
     parser.add_argument("--log_dir", type=str, default="./Personalized_SA/human_model/runs_quad")
     parser.add_argument("--max_test_steps", type=int, default=2000)
     parser.add_argument("--save_path", type=str, default="./Personalized_SA/human_model/checkpoints/actor.pth")
