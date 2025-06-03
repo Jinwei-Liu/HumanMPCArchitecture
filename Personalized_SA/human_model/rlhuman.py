@@ -36,7 +36,7 @@ def test_trained_agent(agent: SAC_countinuous,
     start_pos = env.quad.get_position().copy()
 
     while not done and step_idx < max_steps:
-        a_norm = agent.select_action(state, deterministic=True)
+        a_norm = agent.select_action(state, deterministic=False)
         env_act = scale_to_env(a_norm, env.action_space["low"], env.action_space["high"])
         obs_dict, reward, done, info = env.step(env_act)
         next_state = obs_dict["human"]
@@ -66,11 +66,11 @@ def train(args):
 
     # SAC hyperparameters
     hid_shape = (256, 256)
-    a_lr = 1e-5
-    c_lr = 1e-5
+    a_lr = 1e-4
+    c_lr = 1e-4
     batch_size = 2560
-    alpha = 0.2
-    adaptive_alpha = True
+    alpha = 0.1
+    adaptive_alpha = False
     gamma = 0.99
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     writer = SummaryWriter(log_dir=args.log_dir)

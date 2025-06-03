@@ -48,12 +48,24 @@ def visualize_path_and_gates(start_pos, end_pos, gate_positions, path, true_path
     ax.set_zlabel('Z (m)')
     ax.set_title('Drone Path Planning Through Gates')
 
-    all_points = np.vstack((start_pos, end_pos, gate_positions, path))
-    min_coords = np.min(all_points, axis=0) - 0.5
-    max_coords = np.max(all_points, axis=0) + 0.5
-    ax.set_xlim(min_coords[0], max_coords[0])
-    ax.set_ylim(min_coords[1], max_coords[1])
-    ax.set_zlim(min_coords[2], max_coords[2])
+    # all_points = np.vstack((start_pos, end_pos, gate_positions, path))
+    # min_coords = np.min(all_points, axis=0) - 0.5
+    # max_coords = np.max(all_points, axis=0) + 0.5
+    # ax.set_xlim(min_coords[0], max_coords[0])
+    # ax.set_ylim(min_coords[1], max_coords[1])
+    # ax.set_zlim(min_coords[2], max_coords[2])
+
+    max_range = np.array([gate_positions[:, 0].max() - gate_positions[:, 0].min(),
+                          gate_positions[:, 1].max() - gate_positions[:, 1].min(),
+                          gate_positions[:, 2].max() - gate_positions[:, 2].min()]).max()
+
+    mid_x = (gate_positions[:, 0].max() + gate_positions[:, 0].min()) / 2
+    mid_y = (gate_positions[:, 1].max() + gate_positions[:, 1].min()) / 2
+    mid_z = (gate_positions[:, 2].max() + gate_positions[:, 2].min()) / 2
+
+    ax.set_xlim(mid_x - max_range / 2, mid_x + max_range / 2)
+    ax.set_ylim(mid_y - max_range / 2, mid_y + max_range / 2)
+    ax.set_zlim(mid_z - max_range / 2, mid_z + max_range / 2)
 
     ax.legend()
 

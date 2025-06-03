@@ -41,7 +41,7 @@ class QuadrotorRaceEnv:
 
         # Reward coefficients
         self.gate_pass_reward   = 10.0
-        self.dist_penalty_scale = 100.0
+        self.dist_penalty_scale = 10.0
         self.vel_penalty_scale  = 0.0
         self.crash_penalty      = -0.0
         self.time_penalty       = -0.0
@@ -116,7 +116,8 @@ class QuadrotorRaceEnv:
         reward = self.time_penalty
         current_gate = self.gate_positions[self.current_gate_idx]
         dist_to_gate = np.linalg.norm(pos - current_gate)
-        reward_gate = self.dist_penalty_scale / (dist_to_gate + 1)
+        # reward_gate = self.dist_penalty_scale / (dist_to_gate + 1)
+        reward_gate = - self.dist_penalty_scale * dist_to_gate
         if self.history_reward_gate is None:
             self.history_reward_gate = reward_gate
 
