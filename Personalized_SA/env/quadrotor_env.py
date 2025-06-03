@@ -14,8 +14,8 @@ class QuadrotorRaceEnv:
 
         # Action space bounds for sampling
         self.action_space = {
-            'low':  np.array([0.0,  -50.0, -20.0, -20.0], dtype=np.float32),
-            'high': np.array([100.0,  50.0,  20.0,  20.0], dtype=np.float32)
+            'low':  np.array([0.0,  -20.0, -20.0, -20.0], dtype=np.float32),
+            'high': np.array([20.0,  20.0,  20.0,  20.0], dtype=np.float32)
         }
 
         self.observation_dim_machine = self.quad.s_dim
@@ -42,7 +42,7 @@ class QuadrotorRaceEnv:
         # Reward coefficients
         self.gate_pass_reward   = 10.0
         self.dist_penalty_scale = 10.0
-        self.vel_penalty_scale  = 0.0
+        self.vel_penalty_scale  = -0.01
         self.crash_penalty      = -0.0
         self.time_penalty       = -0.0
         self.history_reward_gate = None
@@ -123,7 +123,7 @@ class QuadrotorRaceEnv:
 
         reward += reward_gate - self.history_reward_gate
         self.history_reward_gate = reward_gate
-        reward += -self.vel_penalty_scale * np.linalg.norm(vel)
+        reward += self.vel_penalty_scale * np.linalg.norm(vel)
 
         if (
             np.any(pos < self.pos_bounds[0]) or
