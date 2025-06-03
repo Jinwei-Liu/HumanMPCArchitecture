@@ -143,7 +143,7 @@ def test(args):
     action_dim = action_low.shape[0]
 
     # SAC hyperparameters (must match those used in training)
-    hid_shape = (128, 128)
+    hid_shape = (256, 256)
     a_lr = 1e-5
     c_lr = 1e-5
     batch_size = 2560

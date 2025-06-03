@@ -31,12 +31,12 @@ class QuadrotorRaceEnv:
         #     10.0 * np.sin(2 * t),
         #     1.0 + 0.5 * np.sin(t)
         # ], dtype=np.float32).T
-        self.gate_positions = np.array([[2.0, 3.0, 2.0],
-                                         [-2.0, 6.0, 2.0],
-                                         [2.0, 9.0, 2.0],
-                                         [-2.0, 12.0, 2.0]], dtype=np.float32)
+        self.gate_positions = np.array([[2.0, 5.0, 2.0],
+                                         [-2.0, 10.0, 2.0],
+                                         [2.0, 15.0, 2.0],
+                                         [-2.0, 20.0, 2.0]], dtype=np.float32)
         # Safety bounds
-        self.pos_bounds = np.array([-5.0, 15.0], dtype=np.float32)
+        self.pos_bounds = np.array([-5.0, 20.0], dtype=np.float32)
         self.vel_bounds = np.array([-100.0, 100.0], dtype=np.float32)
 
         # Reward coefficients
