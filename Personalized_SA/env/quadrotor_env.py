@@ -31,19 +31,19 @@ class QuadrotorRaceEnv:
         #     10.0 * np.sin(2 * t),
         #     1.0 + 0.5 * np.sin(t)
         # ], dtype=np.float32).T
-        self.gate_positions = np.array([[5.0, 3.0, 2.0],
-                                         [3.0, 6.0, 2.0],
-                                         [5.0, 9.0, 2.0],
-                                         [3.0, 12.0, 2.0]], dtype=np.float32)
+        self.gate_positions = np.array([[2.0, 3.0, 2.0],
+                                         [-2.0, 6.0, 2.0],
+                                         [2.0, 9.0, 2.0],
+                                         [-2.0, 12.0, 2.0]], dtype=np.float32)
         # Safety bounds
-        self.pos_bounds = np.array([-20.0, 20.0], dtype=np.float32)
+        self.pos_bounds = np.array([-5.0, 15.0], dtype=np.float32)
         self.vel_bounds = np.array([-100.0, 100.0], dtype=np.float32)
 
         # Reward coefficients
-        self.gate_pass_reward   = 100.0
-        self.dist_penalty_scale = 1000.0
-        self.vel_penalty_scale  = 0.001
-        self.crash_penalty      = -200.0
+        self.gate_pass_reward   = 10.0
+        self.dist_penalty_scale = 100.0
+        self.vel_penalty_scale  = 0.0
+        self.crash_penalty      = -0.0
         self.time_penalty       = -0.0
         self.history_reward_gate = None
 
@@ -95,6 +95,7 @@ class QuadrotorRaceEnv:
             reward += self.gate_pass_reward
             info['gate_passed'] = self.current_gate_idx
             self.current_gate_idx += 1
+            self.history_reward_gate = None
 
             if self.current_gate_idx >= self.num_gates:
                 done = True

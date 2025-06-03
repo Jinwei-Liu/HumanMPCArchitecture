@@ -25,15 +25,15 @@ class Quadrotor_v0(object):
         
         # Sampling range of the quadrotor's initial position
         self._xyz_dist = np.array(
-            [ [4.8, 5.2], # x 
-              [-0.2, 0.2],   # y
+            [ [-0.1, 0.1], # x 
+              [-0.1, 0.1],   # y
               [0.0, 0.1]]   # z
         )
         # Sampling range of the quadrotor's initial velocity
         self._vxyz_dist = np.array(
-            [ [-0.1, 0.1],  # vx
-              [-0.1, 0.1],  # vy
-              [-0.1, 0.1]]  # vz
+            [ [-0.01, 0.01],  # vx
+              [-0.01, 0.01],  # vy
+              [-0.01, 0.01]]  # vz
         )
 
         self.reset()
