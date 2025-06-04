@@ -294,7 +294,118 @@ def main3():
 
         print("Current goal_weights:", goal_weights)
         print("Current ctrl_weights:", ctrl_weights)
-        
+
+def main4():
+    x_arr        = np.load('x_arr.npy')        # 形状 (N, n_state)
+    action_arr   = np.load('action_arr.npy')   # 形状 (N, n_ctrl)
+    x_goal_arr   = np.load('x_goal_arr.npy')   # 形状 (N, n_state)
+
+    print("x_arr.shape:", x_arr.shape)         # (N, n_state)
+    print("action_arr.shape:", action_arr.shape)# (N, n_ctrl)
+    print("x_goal_arr.shape:", x_goal_arr.shape)# (N, n_state)
+
+    DT        = 0.01          # 积分步长 (s)
+    T_HORIZON = 15            # MPC 预测步数
+
+    quad      = Quadrotor_MPC(DT)
+    n_state   = quad.s_dim
+    n_ctrl    = quad.a_dim
+
+    # 2. 这里直接把整个数据集当作一个 batch 来跑
+    #    如果数据集很大，也可以自己设定一个较小的 n_batch 然后在外面循环分批次
+    n_batch = x_arr.shape[0]     # 用全部样本做一个 batch
+    # --- 如果想做 mini-batch，可以把这里设成一个小于 N 的值，然后下面写一个 for b_i in range(0, N, n_batch) 来分批次处理 ---
+
+    # 把 numpy 先转换成 torch.Tensor，注意放到 GPU 或 CPU
+    device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+    x_all      = torch.from_numpy(x_arr).float().to(device)      # [N, n_state]
+    action_all = torch.from_numpy(action_arr).float().to(device) # [N, n_ctrl]
+    x_goal_all = torch.from_numpy(x_goal_arr).float().to(device) # [N, n_state]
+
+    # 3. 可学习的权重
+    #    比如 goal_weights 长度是 n_state，ctrl_weights 长度是 n_ctrl
+    goal_weights = torch.ones(n_state) * 1e-2
+    goal_weights[0:3] = 0.5       # 前 3 维姿态/位置给稍大初值
+    goal_weights = goal_weights.to(device)
+    goal_weights.requires_grad_(True)
+
+    ctrl_weights = torch.ones(n_ctrl) * 1e-2
+    ctrl_weights = ctrl_weights.to(device)
+    ctrl_weights.requires_grad_(True)
+
+    # MPC 的输入约束
+    u_min = torch.tensor([0.0, -50.0, -20.0, -20.0], device=device)
+    u_max = torch.tensor([100.0,  50.0,  20.0,  20.0], device=device)
+    # 这里要把约束也扩成 [T_HORIZON, batch_size, n_ctrl]
+    u_lower = u_min.unsqueeze(0).unsqueeze(0).repeat(T_HORIZON, n_batch, 1)  # [T_HORIZON, batch, n_ctrl]
+    u_upper = u_max.unsqueeze(0).unsqueeze(0).repeat(T_HORIZON, n_batch, 1)  # [T_HORIZON, batch, n_ctrl]
+
+    optimizer = optim.Adam([goal_weights, ctrl_weights], lr=0.01)
+
+    # 4. 训练循环
+    for epoch in range(200):
+        # 4.1 构造一次性用于整个 batch 的 C 和 c
+        #     q = [goal_weights**2, ctrl_weights**2]，长度为 n_state+n_ctrl
+        q_vector = torch.cat((goal_weights**2, ctrl_weights**2), dim=0)  # [n_state + n_ctrl]
+        #     把 q_vector 放到对角矩阵上，并 repeat 到 [T_HORIZON, n_batch, n_state+n_ctrl, n_state+n_ctrl]
+        #     注意：QuadCost 每一步用到的是 state+ctrl 的联合二次形式
+        Q_diag = torch.diag(q_vector)                           # [n_state+n_ctrl, n_state+n_ctrl]
+        C = Q_diag.unsqueeze(0).unsqueeze(0)                     # [1, 1, n_state+n_ctrl, n_state+n_ctrl]
+        C = C.repeat(T_HORIZON, n_batch, 1, 1)                   # [T_HORIZON, n_batch, n_state+n_ctrl, n_state+n_ctrl]
+
+        # 4.2 构造一次性用于整个 batch 的 c
+        #     px = -sqrt(goal_weights**2) * x_goal
+        #     注意 x_goal_all 是 [N, n_state]，把它与 goal_weights 对应相乘
+        px = -torch.sqrt(goal_weights**2).unsqueeze(0) * x_goal_all  # [N, n_state]
+        zeros_u = torch.zeros((n_batch, n_ctrl), device=device)      # [N, n_ctrl]
+        p_all   = torch.cat((px, zeros_u), dim=1)                    # [N, n_state+n_ctrl]
+        #     然后 repeat 到 [T_HORIZON, n_batch, n_state+n_ctrl]
+        c = p_all.unsqueeze(0).repeat(T_HORIZON, 1, 1)               # [T_HORIZON, n_batch, n_state+n_ctrl]
+
+        # 4.3 把 x_all 从 [N, n_state] 变成 MPC 要求的 [batch, n_state] 形式（不需要多维扩展）
+        #     注意 MPC 的调用通常是 ctrl(x, cost, model)，其中 x 的 shape 应该是 [batch, n_state]
+        x_batch = x_all            # [n_batch, n_state]
+
+        # 4.4 构造 QuadCost 对象
+        cost = QuadCost(C, c)      # 内部会把 C, c 记录下来，用于梯度传播
+
+        # 4.5 调用一次 MPC，得到 u_opt 的 shape [T_HORIZON, n_batch, n_ctrl]
+        ctrl = mpc.MPC(
+            n_state=n_state,
+            n_ctrl=n_ctrl,
+            T=T_HORIZON,
+            u_lower=u_lower,
+            u_upper=u_upper,
+            lqr_iter=5,
+            grad_method=GradMethods.ANALYTIC,
+            exit_unconverged=False,
+            detach_unconverged=False,
+            verbose=0
+        )
+        _, u_opt, _ = ctrl(x_batch, cost, quad)  # u_opt: [T_HORIZON, n_batch, n_ctrl]
+
+        # 4.6 计算误差：只取 u_opt 的第一个时刻 (t=0) 与真实 action 的差
+        #     action_all 是 [n_batch, n_ctrl]，u_opt[0] 也是 [n_batch, n_ctrl]
+        u_pred = u_opt[0, :, :]               # [n_batch, n_ctrl]
+        delta_u = u_pred - action_all         # [n_batch, n_ctrl]
+
+        # 4.7 把 batch 内所有样本的平方误差 sum 掉，得到一个标量 loss
+        total_cost = torch.sum(delta_u**2)    # 标量
+
+        # 4.8 反向传播并更新权重
+        optimizer.zero_grad()
+        total_cost.backward()
+        # 可选地做梯度裁剪
+        nn_utils.clip_grad_norm_([goal_weights, ctrl_weights], max_norm=1.0)
+        optimizer.step()
+
+        # 4.9 打印当前信息
+        print(f"Epoch {epoch:03d} | total_cost = {total_cost.item():.6f}")
+        # 如果想看梯度大小，也可以：
+        print(f"  grad norm goal_weights = {goal_weights.grad.norm().item():.6f}")
+        print(f"  grad norm ctrl_weights = {ctrl_weights.grad.norm().item():.6f}")
+        print(f"  current goal_weights = {goal_weights.data.cpu().numpy()}")
+        print(f"  current ctrl_weights = {ctrl_weights.data.cpu().numpy()}")
 
 if __name__ == "__main__":
-    main3()
+    main4()
