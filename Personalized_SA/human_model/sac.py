@@ -27,7 +27,7 @@ class Actor(nn.Module):
         self.LOG_STD_MAX = 2
         self.LOG_STD_MIN = -20
 
-    def forward(self, state, deterministic=False, with_logprob=False):
+    def forward(self, state, deterministic=False, with_logprob=False, temperature = 1.0):
         '''Network with Enforcing Action Bounds'''
         x = state
         for layer in self.net:
@@ -36,7 +36,7 @@ class Actor(nn.Module):
         mu = self.mu_layer(x)
         log_std = self.log_std_layer(x)
         log_std = torch.clamp(log_std, self.LOG_STD_MIN, self.LOG_STD_MAX)
-        std = torch.exp(log_std)
+        std = torch.exp(log_std) * temperature
         dist = Normal(mu, std)
 
         if deterministic:
@@ -119,11 +119,11 @@ class SAC_countinuous():
             self.log_alpha = torch.tensor(np.log(self.alpha), dtype=float, requires_grad=True, device=self.dvc)
             self.alpha_optim = torch.optim.Adam([self.log_alpha], lr=self.c_lr)
 
-    def select_action(self, state, deterministic):
+    def select_action(self, state, deterministic, temperature = 1.0):
         # only used when interact with the env
         with torch.no_grad():
             state = torch.FloatTensor(state[np.newaxis,:]).to(self.dvc)
-            a, _ = self.actor(state, deterministic, with_logprob=False)
+            a, _ = self.actor(state, deterministic, with_logprob=False, temperature=temperature)
         return a.cpu().numpy()[0]
 
     def train(self, writer, total_steps):

@@ -20,7 +20,8 @@ def scale_to_env(a_norm: np.ndarray, low: np.ndarray, high: np.ndarray) -> np.nd
 
 def test_trained_agent(agent: SAC_countinuous,
                        env: QuadrotorRaceEnv,
-                       max_steps: int = 2000):
+                       max_steps: int = 2000,
+                       temperature: float = 1.0):
     """
     Run one episode in the environment using the given agent.
     Returns the start position and the recorded 3D trajectory.
@@ -36,7 +37,7 @@ def test_trained_agent(agent: SAC_countinuous,
     start_pos = env.quad.get_position().copy()
 
     while not done and step_idx < max_steps:
-        a_norm = agent.select_action(state, deterministic=False)
+        a_norm = agent.select_action(state, deterministic=False, temperature=temperature)
         env_act = scale_to_env(a_norm, env.action_space["low"], env.action_space["high"])
         obs_dict, reward, done, info = env.step(env_act)
         next_state = obs_dict["human"]
@@ -131,7 +132,7 @@ def train(args):
     env.close()
     writer.close()
 
-def test(args):
+def test(args, temperature=1.0):
     """
     Load a trained SAC actor (or use a fresh/random agent) and run a single test episode.
     Visualize the planned vs. actual path.
@@ -176,7 +177,7 @@ def test(args):
     agent_for_test.actor.eval()
 
     # Run a test episode
-    start_pos, true_path = test_trained_agent(agent_for_test, env, max_steps=args.max_test_steps)
+    start_pos, true_path = test_trained_agent(agent_for_test, env, max_steps=args.max_test_steps, temperature=temperature)
 
     gate_positions = np.array(env.gate_positions)
     end_pos = true_path[-1]
@@ -207,5 +208,5 @@ if __name__ == "__main__":
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
     args.log_dir = args.log_dir.rstrip("/") + "/" + timestamp
 
-    train(args)
-    # test(args) 
+    # train(args)
+    test(args, temperature=1.0)
