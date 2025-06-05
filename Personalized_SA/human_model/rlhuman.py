@@ -10,7 +10,7 @@ sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '.
 
 from Personalized_SA.env.quadrotor_env import QuadrotorRaceEnv
 from Personalized_SA.human_model.sac import SAC_countinuous
-from Personalized_SA.dataset.identify_human import visualize_path_and_gates
+from Personalized_SA.dataset.test_create_data import visualize_path_and_gates
 
 def scale_to_env(a_norm: np.ndarray, low: np.ndarray, high: np.ndarray) -> np.ndarray:
     """
@@ -32,6 +32,8 @@ def test_trained_agent(agent: SAC_countinuous,
     step_idx = 0
     total_reward = 0.0
     trajectory = []
+    actions = []
+    states = []
 
     # Record the starting position of the drone
     start_pos = env.quad.get_position().copy()
@@ -46,6 +48,8 @@ def test_trained_agent(agent: SAC_countinuous,
 
         pos = env.quad.get_position().copy()
         trajectory.append(pos)
+        actions.append(env_act)
+        states.append(state[:10])
 
         state = next_state
         step_idx += 1
@@ -53,7 +57,7 @@ def test_trained_agent(agent: SAC_countinuous,
     print(f"== Test episode finished: steps = {step_idx}, done = {done}, info = {info}")
     print(f"== Total reward in this episode = {total_reward:.2f}")
 
-    return start_pos, np.array(trajectory)
+    return start_pos, np.array(trajectory), actions, states
 
 def train(args):
     """
@@ -177,7 +181,7 @@ def test(args, temperature=1.0):
     agent_for_test.actor.eval()
 
     # Run a test episode
-    start_pos, true_path = test_trained_agent(agent_for_test, env, max_steps=args.max_test_steps, temperature=temperature)
+    start_pos, true_path, actions, states = test_trained_agent(agent_for_test, env, max_steps=args.max_test_steps, temperature=temperature)
 
     gate_positions = np.array(env.gate_positions)
     end_pos = true_path[-1]
@@ -195,6 +199,8 @@ def test(args, temperature=1.0):
         path=planned_path,
         true_path=true_path
     )
+
+    return actions, states
 
 from datetime import datetime
 if __name__ == "__main__":
