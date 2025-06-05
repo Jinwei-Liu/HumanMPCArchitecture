@@ -1,4 +1,3 @@
-import argparse
 import numpy as np
 import torch
 import torch.optim as optim
@@ -7,6 +6,7 @@ from Personalized_SA.env.quadrotor_env import QuadrotorRaceEnv
 from Personalized_SA.human_model.sac import SAC_countinuous
 from Personalized_SA.env.quadrotor import *
 from typing import Tuple
+from Personalized_SA.config.config import args
 
 class RLHuman:
     def __init__(
@@ -130,13 +130,6 @@ class HumanMPC:
 
         print("Training complete!")
         return x_goal_param.data.cpu().numpy()
-
-parser = argparse.ArgumentParser()
-parser.add_argument("--episodes", type=int, default=1000)
-parser.add_argument("--max_test_steps", type=int, default=2000)
-parser.add_argument("--save_path", type=str, default="./Personalized_SA/human_model/checkpoints/actor.pth")
-parser.add_argument("--load_model", type=str, default="./Personalized_SA/human_model/checkpoints/actor.pth")
-args = parser.parse_args()
 
 from Personalized_SA.human_model.rlhuman import test
 def test_human_mpc():
