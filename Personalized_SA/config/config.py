@@ -5,7 +5,7 @@ import torch
 parser = argparse.ArgumentParser()
 parser.add_argument("--episodes", type=int, default=1000)
 parser.add_argument("--log_dir", type=str, default="./Personalized_SA/human_model/runs_quad")
-parser.add_argument("--max_test_steps", type=int, default=2000)
+parser.add_argument("--max_steps", type=int, default=2000)
 parser.add_argument("--save_path", type=str, default="./Personalized_SA/human_model/checkpoints/actor.pth")
 parser.add_argument("--load_model", type=str, default="./Personalized_SA/human_model/checkpoints/actor.pth")
 parser.add_argument("--hid_shape", nargs=3, type=int, default=[128, 128, 128])

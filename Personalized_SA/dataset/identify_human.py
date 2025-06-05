@@ -49,7 +49,7 @@ u_lower = u_min.unsqueeze(0).unsqueeze(0).repeat(T_HORIZON, n_batch, 1)  # [T_HO
 u_upper = u_max.unsqueeze(0).unsqueeze(0).repeat(T_HORIZON, n_batch, 1)  # [T_HORIZON, N, n_ctrl]
 
 optimizer_weights = optim.Adam([goal_weights, ctrl_weights], lr=0.01)
-optimizer_goal    = optim.Adam([x_goal_param], lr=0.001)
+optimizer_goal    = optim.Adam([x_goal_param], lr=0.01)
 
 for epoch in range(500):
     q_vector = torch.cat((goal_weights**2, ctrl_weights**2), dim=0)  # [n_state + n_ctrl]

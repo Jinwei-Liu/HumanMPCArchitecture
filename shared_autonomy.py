@@ -7,7 +7,7 @@ from Personalized_SA.human_model.sac import SAC_countinuous
 from Personalized_SA.env.quadrotor import *
 from typing import Tuple
 from Personalized_SA.config.config import args
-
+from Personalized_SA.human_model.rlhuman import scale_to_env
 class RLHuman:
     def __init__(
         self,
@@ -15,42 +15,30 @@ class RLHuman:
         action_dim: int,
     ):
         self.device = args.device
-
         self.agent = SAC_countinuous(
             state_dim=state_dim,
             action_dim=action_dim,
-            hidden_sizes=args.hidden_sizes,
-            actor_lr=args.actor_lr,
-            critic_lr=args.critic_lr,
+            hid_shape=args.hid_shape,
+            a_lr=args.actor_lr,
+            c_lr=args.critic_lr,
             batch_size=args.batch_size,
             alpha=args.alpha,
             adaptive_alpha=args.adaptive_alpha,
             gamma=args.gamma,
             write=False,
-            device=self.device,
+            dvc=self.device
         )
-
         checkpoint = torch.load(args.load_model, map_location=self.device)
         self.agent.actor.load_state_dict(checkpoint)
         self.agent.actor.to(self.device)
 
     def select_action(
-        self,
-        state: np.ndarray,
+        self,state: np.ndarray,
         deterministic: bool = False,
         temperature: float = 1.0,
     ) -> np.ndarray:
-        if not isinstance(state, torch.Tensor):
-            state_tensor = torch.tensor(state, dtype=torch.float32, device=self.device)
-        else:
-            state_tensor = state.to(self.device)
-
-        with torch.no_grad():
-            action_tensor = self.agent.select_action(
-                state_tensor, deterministic=deterministic, temperature=temperature
-            )
-
-        return action_tensor.cpu().numpy().flatten()
+        action = self.agent.select_action(state, deterministic=deterministic, temperature=temperature)
+        return action
 
 class HumanMPC:
     def __init__(self, goal_weights, ctrl_weights, DT=0.01, T_HORIZON=15):
@@ -79,7 +67,7 @@ class HumanMPC:
         # 后面的初始化 x_goal_param、优化循环同前面示例
         x_goal_init = torch.from_numpy(x_arr[0]).float().to(self.device)
         x_goal_param = torch.nn.Parameter(x_goal_init.clone(), requires_grad=True)
-        optimizer_goal = optim.Adam([x_goal_param], lr=0.001)
+        optimizer_goal = optim.Adam([x_goal_param], lr=0.01)
 
         for epoch in range(10):
             # 构造 C、c，调用 MPC 时传入 self.u_lower/self.u_upper
@@ -116,52 +104,76 @@ class HumanMPC:
             nn_utils.clip_grad_norm_([x_goal_param], max_norm=1.0)
             optimizer_goal.step()
 
-            print(f"Epoch {epoch:03d} | total_cost = {total_cost.item():.6f}")
-            print(f"  grad norm x_goal_param = {x_goal_param.grad.norm().item():.6f}")
-            print(f"  current x_goal_param = {x_goal_param.data.cpu().numpy()}")
+            # print(f"Epoch {epoch:03d} | total_cost = {total_cost.item():.6f}")
+            # print(f"  grad norm x_goal_param = {x_goal_param.grad.norm().item():.6f}")
+            # print(f"  current x_goal_param = {x_goal_param.data.cpu().numpy()}")
 
-        print("Training complete!")
+        # print("Training complete!")
         return x_goal_param.data.cpu().numpy()
+    
+import collections
 
-from Personalized_SA.human_model.rlhuman import test
-def test_human_mpc():
-    # Load the action and state data from your test set
-    actions, states = test(args, temperature=1)
-    actions = np.array(actions)
-    states = np.array(states)
+def main():
+    env = QuadrotorRaceEnv(dt=0.01)
+    action_low = env.action_space["low"]
+    action_high = env.action_space["high"]
+    state_dim = env.observation_dim_human
+    action_dim = action_low.shape[0]
+    
+    rlhuman = RLHuman(state_dim, action_dim)
 
-    # Print the shapes of the states and actions for debugging
-    print("states.shape:", states.shape)  # (N, n_state)
-    print("actions.shape:", actions.shape)  # (N, n_ctrl)
+    humanmodel = HumanMPC(goal_weights=[1.2749368, 1.0361885, 0.5806143, 0.32337877, -0.6146164, -0.5377732,
+                                         0.31331572, -0.01905611, 0.01074373, 0.03627434],
+                          ctrl_weights=[0.02239764, 0.0380282, 0.03520758, 0.03087953])
 
-    # Goal and control weights (can be customized based on the problem)
-    goal_weights = [1.0, 1.0, 1.0, 1e-5, 1e-5, 1e-5, 1e-5, 1e-5, 1e-5, 1e-5]  # Example goal weights
-    ctrl_weights = [1e-5, 1e-5, 1e-5, 1e-5]  # Example control weights
+    step_idx = 0
+    done = False
+    obs_dict, _ = env.reset()
+    state = obs_dict["human"]
+    rewards = 0.0
+    state_array=[]
+    aim_goal_array=[]
 
-    # Initialize the HumanMPC class with the weights
-    mpc = HumanMPC(goal_weights=goal_weights, ctrl_weights=ctrl_weights)
+    states = collections.deque([state[:10]] * 100, maxlen=10)  # Adjust length as needed
+    actions = collections.deque([np.zeros(action_dim)] * 100, maxlen=10)  # Same length as actions array
 
-    # Test the `run` method to optimize x_goal
-    print("Running optimization for x_goal...")
-    x_goal_final = mpc.run(states[:5,:], actions[:5,:])  # Run the optimization process
+    while not done and step_idx < args.max_steps:
+        print(f"Step {step_idx}")
+        # Sample an action in [-1, 1] and scale to environment bounds
+        a_norm = rlhuman.select_action(state, deterministic=False)
+        env_act = scale_to_env(a_norm, action_low, action_high)
 
-    # Print the final x_goal after optimization
-    print(f"Final x_goal: {x_goal_final}")
+        # Store the current state and action into the stacks (deques)
+        states.append(state[:10])
+        actions.append(env_act)
 
-    # Optionally, visualize the result
-    x_state = states  # Use the state data to visualize the result
+        aim_goal = humanmodel.run(np.array(states), np.array(actions))
+        state_array.append(state[:10])
+        aim_goal_array.append(aim_goal)
+
+
+        # Take a step in the environment
+        obs_dict, reward, done, info = env.step(env_act)
+        next_state = obs_dict["human"]
+
+        state = next_state
+        step_idx += 1
+        rewards += reward
+
+    print(f"Total steps: {step_idx}, Total rewards: {rewards}")
+
     fig = plt.figure(figsize=(10, 8))
     ax = fig.add_subplot(111, projection='3d')
-    ax.scatter(x_goal_final[:, 0], x_goal_final[:, 1], x_goal_final[:, 2], c='r', marker='o', label="Optimized x_goal")
-    ax.scatter(x_state[:, 0], x_state[:, 1], x_state[:, 2], c='b', marker='o', label="Actual State")
 
-    ax.set_title("Inference of x_goal during training (3D Scatter Plot)")
+    ax.scatter(aim_goal_array[:, 0], aim_goal_array[:, 1], aim_goal_array[:, 2], c='r', marker='o')
+    ax.scatter(state_array[:, 0], state_array[:, 1], state_array[:, 2], c='b', marker='o')
+
     ax.set_xlabel("X Position")
     ax.set_ylabel("Y Position")
     ax.set_zlabel("Z Position")
-    ax.legend()
 
     plt.show()
 
-# Run the test
-test_human_mpc()
+
+if __name__ == "__main__":
+    main()

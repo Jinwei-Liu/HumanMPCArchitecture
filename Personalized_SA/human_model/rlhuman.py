@@ -92,7 +92,7 @@ def train(args):
             ep_reward = 0.0
             done = False
             step_idx = 0
-            max_steps=args.max_test_steps
+            max_steps=args.max_steps
 
             while not done and step_idx < max_steps:
                 # Sample an action in [-1, 1] and scale to environment bounds
@@ -162,7 +162,7 @@ def test(args, temperature=1.0):
     agent_for_test.actor.eval()
 
     # Run a test episode
-    start_pos, true_path, actions, states = test_trained_agent(agent_for_test, env, max_steps=args.max_test_steps, temperature=temperature)
+    start_pos, true_path, actions, states = test_trained_agent(agent_for_test, env, max_steps=args.max_steps, temperature=temperature)
 
     gate_positions = np.array(env.gate_positions)
     end_pos = true_path[-1]
