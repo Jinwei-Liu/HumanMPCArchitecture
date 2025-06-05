@@ -10,7 +10,7 @@ sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '.
 
 from Personalized_SA.env.quadrotor_env import QuadrotorRaceEnv
 from Personalized_SA.human_model.sac import SAC_countinuous
-from Personalized_SA.dataset.create_data import visualize_path_and_gates
+from Personalized_SA.dataset.identify_human import visualize_path_and_gates
 
 def scale_to_env(a_norm: np.ndarray, low: np.ndarray, high: np.ndarray) -> np.ndarray:
     """
@@ -71,7 +71,7 @@ def train(args):
     c_lr = 1e-3
     batch_size = 2560
     alpha = 0.1
-    adaptive_alpha = False
+    adaptive_alpha = True
     gamma = 0.99
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     writer = SummaryWriter(log_dir=args.log_dir)
@@ -145,11 +145,11 @@ def test(args, temperature=1.0):
 
     # SAC hyperparameters (must match those used in training)
     hid_shape = (128, 128, 128)
-    a_lr = 1e-4
-    c_lr = 1e-4
+    a_lr = 1e-3
+    c_lr = 1e-3
     batch_size = 2560
     alpha = 0.1
-    adaptive_alpha = False
+    adaptive_alpha = True
     gamma = 0.99
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
