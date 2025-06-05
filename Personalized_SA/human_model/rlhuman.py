@@ -4,9 +4,7 @@ from torch.utils.tensorboard import SummaryWriter
 from tqdm import tqdm
 import sys
 import os
-
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..')))
-
 from Personalized_SA.env.quadrotor_env import QuadrotorRaceEnv
 from Personalized_SA.human_model.sac import SAC_countinuous
 from Personalized_SA.dataset.test_create_data import visualize_path_and_gates
@@ -68,27 +66,20 @@ def train(args):
     state_dim = env.observation_dim_human
     action_dim = action_low.shape[0]
 
-    # SAC hyperparameters
-    hid_shape = (128, 128, 128)
-    a_lr = 1e-3
-    c_lr = 1e-3
-    batch_size = 2560
-    alpha = 0.1
-    adaptive_alpha = True
-    gamma = 0.99
-    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    device = args.device
+
     writer = SummaryWriter(log_dir=args.log_dir)
 
     agent = SAC_countinuous(
         state_dim=state_dim,
         action_dim=action_dim,
-        hid_shape=hid_shape,
-        a_lr=a_lr,
-        c_lr=c_lr,
-        batch_size=batch_size,
-        alpha=alpha,
-        adaptive_alpha=adaptive_alpha,
-        gamma=gamma,
+        hid_shape=args.hid_shape,
+        a_lr=args.actor_lr,
+        c_lr=args.critic_lr,
+        batch_size=args.batch_size,
+        alpha=args.alpha,
+        adaptive_alpha=args.adaptive_alpha,
+        gamma=args.gamma,
         write=True,
         dvc=device
     )
@@ -118,7 +109,7 @@ def train(args):
                 total_steps += 1
                 step_idx += 1
 
-                if agent.replay_buffer.size > batch_size:
+                if agent.replay_buffer.size > args.batch_size:
                     if step_idx%50 == 1:
                         for _ in range(10):
                             agent.train(writer=writer, total_steps=total_steps)
@@ -146,29 +137,20 @@ def test(args, temperature=1.0):
     state_dim = env.observation_dim_human
     action_dim = action_low.shape[0]
 
-    # SAC hyperparameters (must match those used in training)
-    hid_shape = (128, 128, 128)
-    a_lr = 1e-3
-    c_lr = 1e-3
-    batch_size = 2560
-    alpha = 0.1
-    adaptive_alpha = True
-    gamma = 0.99
-    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    device = args.device
 
-    # Decide which agent to use for testing
     if args.load_model:
         print(f"Loading actor weights from {args.load_model} for testing.")
         agent_for_test = SAC_countinuous(
             state_dim=state_dim,
             action_dim=action_dim,
-            hid_shape=hid_shape,
-            a_lr=a_lr,
-            c_lr=c_lr,
-            batch_size=batch_size,
-            alpha=alpha,
-            adaptive_alpha=adaptive_alpha,
-            gamma=gamma,
+            hid_shape=args.hid_shape,
+            a_lr=args.actor_lr,
+            c_lr=args.critic_lr,
+            batch_size=args.batch_size,
+            alpha=args.alpha,
+            adaptive_alpha=args.adaptive_alpha,
+            gamma=args.gamma,
             write=False,
             dvc=device
         )

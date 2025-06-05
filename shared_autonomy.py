@@ -13,32 +13,24 @@ class RLHuman:
         self,
         state_dim: int,
         action_dim: int,
-        hidden_sizes: Tuple[int, int, int] = (128, 128, 128),
-        actor_lr: float = 1e-3,
-        critic_lr: float = 1e-3,
-        batch_size: int = 2560,
-        alpha: float = 0.1,
-        adaptive_alpha: bool = True,
-        gamma: float = 0.99,
-        checkpoint_path: str = "./Personalized_SA/human_model/checkpoints/actor.pth",
     ):
-        self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+        self.device = args.device
 
         self.agent = SAC_countinuous(
             state_dim=state_dim,
             action_dim=action_dim,
-            hidden_sizes=hidden_sizes,
-            actor_lr=actor_lr,
-            critic_lr=critic_lr,
-            batch_size=batch_size,
-            alpha=alpha,
-            adaptive_alpha=adaptive_alpha,
-            gamma=gamma,
+            hidden_sizes=args.hidden_sizes,
+            actor_lr=args.actor_lr,
+            critic_lr=args.critic_lr,
+            batch_size=args.batch_size,
+            alpha=args.alpha,
+            adaptive_alpha=args.adaptive_alpha,
+            gamma=args.gamma,
             write=False,
             device=self.device,
         )
 
-        checkpoint = torch.load(checkpoint_path, map_location=self.device)
+        checkpoint = torch.load(args.load_model, map_location=self.device)
         self.agent.actor.load_state_dict(checkpoint)
         self.agent.actor.to(self.device)
 
@@ -66,7 +58,7 @@ class HumanMPC:
         self.T_HORIZON = T_HORIZON
         self.quad = Quadrotor_MPC(self.DT)
         self.n_state, self.n_ctrl = self.quad.s_dim, self.quad.a_dim
-        self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+        self.device = args.device
         self.goal_weights = torch.Tensor(goal_weights).to(self.device)
         self.ctrl_weights = torch.Tensor(ctrl_weights).to(self.device)
 
