@@ -165,6 +165,9 @@ def main():
     fig = plt.figure(figsize=(10, 8))
     ax = fig.add_subplot(111, projection='3d')
 
+    state_array = np.array(state_array)
+    aim_goal_array = np.array(aim_goal_array)
+    
     ax.scatter(aim_goal_array[:, 0], aim_goal_array[:, 1], aim_goal_array[:, 2], c='r', marker='o')
     ax.scatter(state_array[:, 0], state_array[:, 1], state_array[:, 2], c='b', marker='o')
 
