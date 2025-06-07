@@ -31,10 +31,17 @@ class QuadrotorRaceEnv:
         #     10.0 * np.sin(2 * t),
         #     1.0 + 0.5 * np.sin(t)
         # ], dtype=np.float32).T
-        self.gate_positions = np.array([[2.0, 5.0, 2.0],
+        self.gate_positions_raw = np.array([[2.0, 5.0, 2.0],
                                          [-2.0, 10.0, 2.0],
                                          [2.0, 15.0, 2.0],
                                          [-2.0, 20.0, 2.0]], dtype=np.float32)
+        self.noise_bounds = np.array([
+            [-0.5, 0.5],  
+            [-1.0, 1.0], 
+            [-3.0, 3.0] 
+        ])
+
+        self.gate_positions = self.gate_positions_raw + np.random.uniform(low=self.noise_bounds[:, 0],high=self.noise_bounds[:, 1], size=self.gate_positions_raw.shape)
         # Safety bounds
         self.pos_bounds = np.array([-5.0, 20.0], dtype=np.float32)
         self.vel_bounds = np.array([-100.0, 100.0], dtype=np.float32)
@@ -50,7 +57,7 @@ class QuadrotorRaceEnv:
     def reset(self, seed: Optional[int] = None, options: Optional[dict] = None):
         if seed is not None:
             np.random.seed(seed)
-
+        self.gate_positions = self.gate_positions_raw + np.random.uniform(low=self.noise_bounds[:, 0],high=self.noise_bounds[:, 1], size=self.gate_positions_raw.shape)
         state = self.quad.reset()
         self.current_gate_idx = 0
         self.history_reward_gate = None
