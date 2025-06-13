@@ -1,0 +1,28 @@
+<?xml version="1.0"?>
+<robot name="race_gate">
+  <link name="gate_link">
+    <visual>
+      <origin xyz="0 0 0" rpy="0 0 0"/>
+      <geometry>
+        <mesh filename="gate.obj"/>
+      </geometry>
+      <material name="white">
+        <color rgba="1 1 1 1"/>
+      </material>
+    </visual>
+    <collision>
+      <origin xyz="0 0 0" rpy="0 0 0"/>
+      <geometry>
+        <mesh filename="gate.obj"/>
+      </geometry>
+    </collision>
+    <inertial>
+      <mass value="0.1"/>
+      <inertia
+        ixx="0.001" ixy="0" ixz="0"
+        iyy="0.001" iyz="0"
+        izz="0.001"/>
+    </inertial>
+  </link>
+</robot>
+

@@ -50,13 +50,13 @@ class QuadrotorRaceEnv:
         ])
 
         # Visualization handles
-        self.gate_lines = []
+        self.gate_ids = []
 
         # Initialize PyBullet for rendering if in human mode
         if self.mode == 'human':
             if p is None:
                 raise ImportError("pybullet is required for human mode but not installed.")
-            p.connect(p.GUI)
+            p.connect(p.GUI, options="--opengl2")
             p.setAdditionalSearchPath(
                 os.path.join(os.path.dirname(__file__), 'util'),
             )
@@ -82,6 +82,8 @@ class QuadrotorRaceEnv:
         self.time_penalty       = -0.0
         self.history_reward_gate = None
 
+        self.reset()
+
     def reset(self, seed: Optional[int] = None, options: Optional[dict] = None):
         if seed is not None:
             np.random.seed(seed)
@@ -96,23 +98,19 @@ class QuadrotorRaceEnv:
         self.history_reward_gate = None
 
         # Clear existing debug lines
-        if self.mode == 'human' and self.gate_lines:
-            for lid in self.gate_lines:
-                p.removeUserDebugItem(lid)
-            self.gate_lines = []
+        if self.mode == 'human' and self.gate_ids:
+            for gid in self.gate_ids:
+                p.removeBody(gid)
+            self.gate_ids = []
 
         # Draw gates once per reset
         if self.mode == 'human':
             for gate_pos in self.gate_positions:
-                start = gate_pos.tolist()
-                end   = [gate_pos[0], gate_pos[1], gate_pos[2] + 1]
-                lid = p.addUserDebugLine(
-                    lineFromXYZ=start,
-                    lineToXYZ=end,
-                    lineColorRGB=[1, 0, 0],
-                    lineWidth=1.5
+                gid = p.loadURDF("gate.urdf",
+                    basePosition=gate_pos.tolist(),
+                    useFixedBase=True
                 )
-                self.gate_lines.append(lid)
+                self.gate_ids.append(gid)
 
         obs_machine = state.astype(np.float32)
         current_gate = self.gate_positions[self.current_gate_idx]
