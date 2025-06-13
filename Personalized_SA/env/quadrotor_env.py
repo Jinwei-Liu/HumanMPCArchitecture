@@ -204,7 +204,7 @@ class QuadrotorRaceEnv:
         )
         # Only update camera; gates already drawn
         p.resetDebugVisualizerCamera(
-            cameraDistance=5,
+            cameraDistance=2,
             cameraYaw=50,
             cameraPitch=-35,
             cameraTargetPosition=pos_model.tolist()

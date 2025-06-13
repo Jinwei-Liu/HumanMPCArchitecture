@@ -1,7 +1,7 @@
 import math
 
 inner_radius = 0.5      # 内圈半径 0.5 m
-thickness = 0.2        # 环宽 0.05 m （外圈半径 = 0.55 m）
+thickness = 0.2       
 outer_radius = inner_radius + thickness
 segments = 64          
 
