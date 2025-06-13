@@ -43,8 +43,8 @@ goal_weights.requires_grad_(True)
 ctrl_weights = torch.ones(n_ctrl, device=device) * 1e-2
 ctrl_weights.requires_grad_(True)
 
-u_min = torch.tensor([0.0, -50.0, -20.0, -20.0], device=device)
-u_max = torch.tensor([100.0,  50.0,  20.0,  20.0], device=device)
+u_min = torch.tensor([0.0, -20.0, -20.0, -20.0], device=device)
+u_max = torch.tensor([100.0,  20.0,  20.0,  20.0], device=device)
 u_lower = u_min.unsqueeze(0).unsqueeze(0).repeat(T_HORIZON, n_batch, 1)  # [T_HORIZON, N, n_ctrl]
 u_upper = u_max.unsqueeze(0).unsqueeze(0).repeat(T_HORIZON, n_batch, 1)  # [T_HORIZON, N, n_ctrl]
 

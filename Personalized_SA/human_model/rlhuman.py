@@ -39,6 +39,7 @@ def test_trained_agent(agent: SAC_countinuous,
         a_norm = agent.select_action(state, deterministic=False, temperature=temperature)
         env_act = scale_to_env(a_norm, env.action_space["low"], env.action_space["high"])
         obs_dict, reward, done, info = env.step(env_act)
+        env.render()
         next_state = obs_dict["human"]
 
         total_reward += reward
@@ -131,7 +132,7 @@ def test(args, temperature=1.0):
     Load a trained SAC actor (or use a fresh/random agent) and run a single test episode.
     Visualize the planned vs. actual path.
     """
-    env = QuadrotorRaceEnv(dt=0.01)
+    env = QuadrotorRaceEnv(dt=0.01, mode='human')
     action_low = env.action_space["low"]
     action_high = env.action_space["high"]
     state_dim = env.observation_dim_human

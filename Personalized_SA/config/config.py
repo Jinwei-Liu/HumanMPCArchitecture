@@ -5,7 +5,7 @@ import random
 import numpy as np
 
 parser = argparse.ArgumentParser()
-parser.add_argument("--episodes", type=int, default=5000)
+parser.add_argument("--episodes", type=int, default=3000)
 parser.add_argument("--log_dir", type=str, default="./Personalized_SA/human_model/runs_quad")
 parser.add_argument("--max_steps", type=int, default=2000)
 parser.add_argument("--save_path", type=str, default="./Personalized_SA/human_model/checkpoints/actor.pth")
