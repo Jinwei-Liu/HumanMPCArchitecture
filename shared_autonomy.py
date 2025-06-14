@@ -8,6 +8,7 @@ from Personalized_SA.env.quadrotor import *
 from typing import Tuple
 from Personalized_SA.config.config import args
 from Personalized_SA.human_model.rlhuman import scale_to_env
+from Personalized_SA.dataset.test_create_data import visualize_path_and_gates
 class RLHuman:
     def __init__(
         self,
@@ -53,6 +54,43 @@ class HumanMPC:
         self.u_min = torch.tensor([0.0, -20.0, -20.0, -20.0], device=self.device)
         self.u_max = torch.tensor([100.0, 20.0, 20.0, 20.0], device=self.device)
 
+    def step(self, state, aim):
+        n_batch = 1
+        x_all = torch.from_numpy(state).float().to(self.device)
+        x_all = x_all.unsqueeze(0)
+
+        self.u_lower = self.u_min.unsqueeze(0).unsqueeze(0).repeat(self.T_HORIZON, n_batch, 1).to(self.device)
+        self.u_upper = self.u_max.unsqueeze(0).unsqueeze(0).repeat(self.T_HORIZON, n_batch, 1).to(self.device)
+
+        x_goal_param = torch.from_numpy(aim).float().to(self.device)
+
+        # 构造 C、c，调用 MPC 时传入 self.u_lower/self.u_upper
+        q_vector = torch.cat((self.goal_weights**2, self.ctrl_weights**2), dim=0)
+        Q_diag = torch.diag(q_vector)
+        C = Q_diag.unsqueeze(0).unsqueeze(0).repeat(self.T_HORIZON, n_batch, 1, 1)
+
+        x_goal = x_goal_param.unsqueeze(0).repeat(n_batch, 1)
+        px = -torch.sqrt(self.goal_weights**2).unsqueeze(0) * x_goal
+        zeros_u = torch.zeros((n_batch, self.n_ctrl), device=self.device)
+        p_all = torch.cat((px, zeros_u), dim=1)
+        c = p_all.unsqueeze(0).repeat(self.T_HORIZON, 1, 1)
+        cost = QuadCost(C, c)
+
+        ctrl = mpc.MPC(
+            n_state=self.n_state,
+            n_ctrl=self.n_ctrl,
+            T=self.T_HORIZON,
+            u_lower=self.u_lower,
+            u_upper=self.u_upper,
+            lqr_iter=2,
+            grad_method=GradMethods.ANALYTIC,
+            exit_unconverged=False,
+            detach_unconverged=False,
+            verbose=0
+        )
+        x, u_opt, _ = ctrl(x_all, cost, self.quad)
+        return x.detach().cpu().numpy(), u_opt.detach().cpu().numpy()
+
     def run(self, states, actions):
         x_arr = states
         action_arr = actions
@@ -67,7 +105,7 @@ class HumanMPC:
         # 后面的初始化 x_goal_param、优化循环同前面示例
         x_goal_init = torch.from_numpy(x_arr[0]).float().to(self.device)
         x_goal_param = torch.nn.Parameter(x_goal_init.clone(), requires_grad=True)
-        optimizer_goal = optim.Adam([x_goal_param], lr=0.05)
+        optimizer_goal = optim.Adam([x_goal_param], lr=0.001)
 
         for epoch in range(10):
             # 构造 C、c，调用 MPC 时传入 self.u_lower/self.u_upper
@@ -174,7 +212,7 @@ def main():
                           ctrl_weights=[0.02876389, 0.04248761, 0.04461192, 0.03424085])
     
     assistvempc = AssistiveMPC(goal_weights=[1,1,1,1e-5,1e-5,1e-5,1e-5,1e-5,1e-5,1e-5],
-                               ctrl_weights=[1,1,1,1])
+                               ctrl_weights=[1,1,1,1],T_HORIZON=15)
 
     step_idx = 0
     done = False
@@ -184,8 +222,8 @@ def main():
     state_array=[]
     aim_goal_array=[]
 
-    states = collections.deque([state[:10]] * 50, maxlen=3)  # Adjust length as needed
-    actions = collections.deque([np.zeros(action_dim)] * 50, maxlen=3)  # Same length as actions array
+    states = collections.deque([state[:10]] * 100, maxlen=5)  # Adjust length as needed
+    actions = collections.deque([np.zeros(action_dim)] * 100, maxlen=5)  # Same length as actions array
 
     while not done and step_idx < args.max_steps:
         print(f"Step {step_idx}")
@@ -193,15 +231,25 @@ def main():
         a_norm = rlhuman.select_action(state, deterministic=False, temperature=1.0)
         env_act = scale_to_env(a_norm, action_low, action_high)
 
-
         # Store the current state and action into the stacks (deques)
         states.append(state[:10])
         actions.append(env_act)
 
         aim_goal = humanmodel.run(np.array(states), np.array(actions))
-        assistvempc_action = assistvempc.run(state[:10], env_act, aim_goal, _, _)
-        print(env_act, assistvempc_action)
-        env_act = assistvempc_action
+        # assistvempc_action = assistvempc.run(state[:10], env_act, aim_goal, _, _)
+        # print(env_act, assistvempc_action)
+        # env_act = assistvempc_action
+
+        if step_idx == 200:
+            show_env = Quadrotor_v0(0.01)
+            show_env.set_state(state[:10])
+            hold_u_x = []
+            hold_u_x.append(state[:10])
+            store_aim_goal = aim_goal
+            for _ in range(15):
+                hold_u_x.append(show_env.run(env_act))
+            hold_u_x = np.array(hold_u_x)
+            x, u =humanmodel.step(state[:10],aim_goal)
 
         state_array.append(state[:10])
         aim_goal_array.append(aim_goal)
@@ -224,12 +272,22 @@ def main():
     
     ax.scatter(aim_goal_array[:, 0], aim_goal_array[:, 1], aim_goal_array[:, 2], c='r', marker='o')
     ax.scatter(state_array[:, 0], state_array[:, 1], state_array[:, 2], c='b', marker='o')
+    ax.scatter(x[:,0, 0], x[:,0, 1], x[:,0, 2], c='y', marker='o')
+    ax.scatter(hold_u_x[:, 0], hold_u_x[:, 1], hold_u_x[:, 2], c='g', marker='o')
+    ax.scatter(store_aim_goal[0], store_aim_goal[1], store_aim_goal[2], c='k', marker='D')
 
     ax.set_xlabel("X Position")
     ax.set_ylabel("Y Position")
     ax.set_zlabel("Z Position")
 
     plt.show()
+    visualize_path_and_gates(
+        start_pos=state_array[0],
+        end_pos=state_array[-1],
+        gate_positions=env.gate_positions,
+        path=aim_goal_array,
+        true_path=state_array
+    )
 
 if __name__ == "__main__":
     main()

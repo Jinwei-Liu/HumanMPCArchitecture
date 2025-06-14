@@ -120,6 +120,11 @@ for epoch in range(500):
 print("Training finished!")
 
 x_goal_final = x_goal_param.data.cpu().numpy()  # Get the final inferred goal state array
+last_three_columns = x_goal_final[:, -3:]
+
+row_mean = np.mean(np.sqrt(np.sum(last_three_columns**2, axis=1)))
+print("row_mean",row_mean)
+
 x_state = x_arr
 fig = plt.figure(figsize=(10, 8))
 ax = fig.add_subplot(111, projection='3d')
