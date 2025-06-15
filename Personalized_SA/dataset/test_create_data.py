@@ -94,7 +94,7 @@ def main():
     planned_path = plan_path(START_POS, actual_gate_positions, END_POS, NUM_PATH_POINTS, SPLINE_DEGREE)
 
     DT          = 0.01          # 积分步长  (s)
-    T_HORIZON   = 15         # MPC 预测步数
+    T_HORIZON   = 50         # MPC 预测步数
 
     quad = Quadrotor_MPC(DT)
     quad_env = Quadrotor_v0(DT)
@@ -102,9 +102,9 @@ def main():
 
     n_state, n_ctrl   = quad.s_dim, quad.a_dim
 
-    w_pos, w_vel      = 1., 1e-5
-    w_quat            = 1e-5
-    w_act             = 1e-5
+    w_pos, w_vel      = 1., 0
+    w_quat            = 0.
+    w_act             = 0.1
     n_batch           = 1
 
     goal_weights = torch.Tensor([w_pos, w_pos, w_pos,              # 位置
@@ -119,9 +119,9 @@ def main():
     ))
 
     C = torch.diag(q).unsqueeze(0).unsqueeze(0).repeat(T_HORIZON, n_batch, 1, 1)
-                     
-    u_min = torch.tensor([0.0, -50.0, -20.0, -20.0])
-    u_max = torch.tensor([100.0,  50.0,  20.0,  20.0])
+
+    u_min = torch.tensor([0.0, -20.0, -20.0, -20.0])
+    u_max = torch.tensor([50.0,  20.0,  20.0,  20.0])
 
     u_lower = u_min.repeat(T_HORIZON, 1, 1)   # (25, 4)
     u_upper = u_max.repeat(T_HORIZON, 1, 1)   # (25, 4)
@@ -157,15 +157,15 @@ def main():
         verbose=0)
         
         x_goal = torch.zeros(n_state)
-        x_goal[kQuatW]    = 1.0                       # 悬停姿态
+        x_goal[kQuatW]    = 0.0                       # 悬停姿态
         x_goal[kPosX]    = planned_path[step, 0]        # 目标位置
         x_goal[kPosY]    = planned_path[step, 1]
         x_goal[kPosZ]    = planned_path[step, 2]
 
-        px = -torch.sqrt(goal_weights)*x_goal
-        p = torch.cat((px, torch.zeros(n_ctrl)))
-        # x_aim =  torch.cat((x_goal, torch.tensor([9.81,0,0,0])))
-        # p = -torch.sqrt(q)*x_aim
+        # px = -torch.sqrt(goal_weights)*x_goal
+        # p = torch.cat((px, torch.zeros(n_ctrl)))
+        x_aim =  torch.cat((x_goal, torch.tensor([9.81,0,0,0])))
+        p = -torch.sqrt(q)*x_aim
 
         c = p.unsqueeze(0).repeat(T_HORIZON, n_batch, 1)
 

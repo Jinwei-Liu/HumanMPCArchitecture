@@ -8,6 +8,7 @@ sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '.
 from Personalized_SA.env.quadrotor_env import QuadrotorRaceEnv
 from Personalized_SA.human_model.sac import SAC_countinuous
 from Personalized_SA.dataset.test_create_data import visualize_path_and_gates
+import matplotlib.pyplot as plt
 
 def scale_to_env(a_norm: np.ndarray, low: np.ndarray, high: np.ndarray) -> np.ndarray:
     """
@@ -54,7 +55,6 @@ def test_trained_agent(agent: SAC_countinuous,
 
     print(f"== Test episode finished: steps = {step_idx}, done = {done}, info = {info}")
     print(f"== Total reward in this episode = {total_reward:.2f}")
-
     return start_pos, np.array(trajectory), actions, states
 
 def train(args):
@@ -165,6 +165,24 @@ def test(args, temperature=1.0):
     # Run a test episode
     start_pos, true_path, actions, states = test_trained_agent(agent_for_test, env, max_steps=args.max_steps, temperature=temperature)
 
+    n_state = 10
+    states = np.array(states)
+    fig, axes = plt.subplots(n_state,      # 行数 = 状态维度
+                        1,            # 一列
+                        sharex=True,  # 共用 x 轴
+                        figsize=(6, 1.8*n_state)) 
+
+    for dim in range(n_state):
+        ax = axes[dim]                    # 当前子图
+        ax.plot(states[:, dim])            # 画出 dim 维
+        ax.set_ylabel(f"x[{dim}]")
+        ax.grid(True, linestyle="--", alpha=0.4)
+
+    axes[-1].set_xlabel("Timestep")       # 只在最后一行标注
+    fig.suptitle("Evolution of state vector x", y=1.02)
+    fig.tight_layout()
+    plt.show()
+
     gate_positions = np.array(env.gate_positions)
     end_pos = true_path[-1]
 
@@ -188,4 +206,4 @@ from Personalized_SA.config.config import args
 
 if __name__ == "__main__":
     # train(args)
-    test(args, temperature=1.0)
+    test(args, temperature=0.01)
