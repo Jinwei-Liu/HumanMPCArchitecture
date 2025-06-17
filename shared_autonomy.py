@@ -55,6 +55,7 @@ class HumanMPC:
         self.u_max = torch.tensor([100.0, 20.0, 20.0, 20.0], device=self.device)
 
     def step(self, state, aim):
+        aim[11:]=0
         n_batch = 1
         x_all = torch.from_numpy(state).float().to(self.device)
         x_all = x_all.unsqueeze(0)
@@ -70,9 +71,10 @@ class HumanMPC:
         C = Q_diag.unsqueeze(0).unsqueeze(0).repeat(self.T_HORIZON, n_batch, 1, 1)
 
         x_goal = x_goal_param.unsqueeze(0).repeat(n_batch, 1)
-        px = -torch.sqrt(self.goal_weights**2).unsqueeze(0) * x_goal
-        zeros_u = torch.zeros((n_batch, self.n_ctrl), device=self.device)
-        p_all = torch.cat((px, zeros_u), dim=1)
+        # px = -torch.sqrt(self.goal_weights**2).unsqueeze(0) * x_goal
+        # zeros_u = torch.zeros((n_batch, self.n_ctrl), device=self.device)
+        # p_all = torch.cat((px, zeros_u), dim=1)
+        p_all = -torch.sqrt(q_vector).unsqueeze(0) * x_goal
         c = p_all.unsqueeze(0).repeat(self.T_HORIZON, 1, 1)
         cost = QuadCost(C, c)
 
@@ -92,31 +94,30 @@ class HumanMPC:
         return x.detach().cpu().numpy(), u_opt.detach().cpu().numpy()
 
     def run(self, states, actions):
-        x_arr = states
-        action_arr = actions
-        n_batch = x_arr.shape[0]
-        x_all = torch.from_numpy(x_arr).float().to(self.device)
-        action_all = torch.from_numpy(action_arr).float().to(self.device)
+        n_batch = states.shape[0]
+        x_all = torch.from_numpy(states).float().to(self.device)
+        action_all = torch.from_numpy(actions).float().to(self.device)
 
         # 根据 n_batch 动态重置 u_lower、u_upper
         self.u_lower = self.u_min.unsqueeze(0).unsqueeze(0).repeat(self.T_HORIZON, n_batch, 1).to(self.device)
         self.u_upper = self.u_max.unsqueeze(0).unsqueeze(0).repeat(self.T_HORIZON, n_batch, 1).to(self.device)
 
         # 后面的初始化 x_goal_param、优化循环同前面示例
-        x_goal_init = torch.from_numpy(x_arr[0]).float().to(self.device)
+        x_goal_init = torch.from_numpy(np.concatenate((states[0],actions[0]),axis=0)).float().to(self.device)
         x_goal_param = torch.nn.Parameter(x_goal_init.clone(), requires_grad=True)
-        optimizer_goal = optim.Adam([x_goal_param], lr=0.001)
+        optimizer_goal = optim.Adam([x_goal_param], lr=0.01)
 
-        for epoch in range(10):
+        for epoch in range(3):
             # 构造 C、c，调用 MPC 时传入 self.u_lower/self.u_upper
             q_vector = torch.cat((self.goal_weights**2, self.ctrl_weights**2), dim=0)
             Q_diag = torch.diag(q_vector)
             C = Q_diag.unsqueeze(0).unsqueeze(0).repeat(self.T_HORIZON, n_batch, 1, 1)
 
             x_goal = x_goal_param.unsqueeze(0).repeat(n_batch, 1)
-            px = -torch.sqrt(self.goal_weights**2).unsqueeze(0) * x_goal
-            zeros_u = torch.zeros((n_batch, self.n_ctrl), device=self.device)
-            p_all = torch.cat((px, zeros_u), dim=1)
+            # px = -torch.sqrt(self.goal_weights**2).unsqueeze(0) * x_goal
+            # zeros_u = torch.zeros((n_batch, self.n_ctrl), device=self.device)
+            # p_all = torch.cat((px, zeros_u), dim=1)
+            p_all = -torch.sqrt(q_vector).unsqueeze(0) * x_goal
             c = p_all.unsqueeze(0).repeat(self.T_HORIZON, 1, 1)
             cost = QuadCost(C, c)
 
@@ -207,9 +208,9 @@ def main():
     
     rlhuman = RLHuman(state_dim, action_dim)
 
-    humanmodel = HumanMPC(goal_weights= [1.4150547,   1.0087632,   0.6578214,   0.5467745,   0.74417806,  0.5884964,
-                                            0.60344136, -0.01580581,  0.01528102, -0.02966221],
-                          ctrl_weights=[0.02876389, 0.04248761, 0.04461192, 0.03424085])
+    humanmodel = HumanMPC(goal_weights= [ 0.64711493,  0.66613936,  0.33236507, -0.20962556,  0.67796534,  0.49057913,
+                                        0.69507426,  0.15057886,  0.01199878,  0.23589016],
+                          ctrl_weights=[0.9341174,  0.97458977, 0.91246486, 0.9124608])
     
     assistvempc = AssistiveMPC(goal_weights=[1,1,1,1e-5,1e-5,1e-5,1e-5,1e-5,1e-5,1e-5],
                                ctrl_weights=[1,1,1,1],T_HORIZON=15)
@@ -240,7 +241,7 @@ def main():
         # print(env_act, assistvempc_action)
         # env_act = assistvempc_action
 
-        if step_idx == 200:
+        if step_idx == 310:
             show_env = Quadrotor_v0(0.01)
             show_env.set_state(state[:10])
             hold_u_x = []

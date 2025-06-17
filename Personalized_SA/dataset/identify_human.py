@@ -8,7 +8,7 @@ import torch.optim as optim
 import torch.nn.utils as nn_utils
 from Personalized_SA.config.config import args
 
-actions, states = test(args, temperature=1)
+actions, states = test(args, temperature=0.01)
 actions = np.array(actions)
 states = np.array(states)
 
@@ -32,7 +32,8 @@ n_batch = x_arr.shape[0]     # Use all samples as a batch
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 x_all      = torch.from_numpy(x_arr).float().to(device)      # [N, n_state]
 action_all = torch.from_numpy(action_arr).float().to(device) # [N, n_ctrl]
-x_goal_init = torch.from_numpy(x_goal_arr).float().to(device) # [N, n_state]
+# x_goal_init = torch.from_numpy(x_goal_arr).float().to(device) # [N, n_state]
+x_goal_init   = torch.cat((x_all, action_all), dim=1)
 
 x_goal_param = torch.nn.Parameter(x_goal_init.clone(), requires_grad=True)  # [N, n_state]
 
@@ -57,9 +58,12 @@ for epoch in range(500):
     C = Q_diag.unsqueeze(0).unsqueeze(0)                     # [1, 1, n_state+n_ctrl, n_state+n_ctrl]
     C = C.repeat(T_HORIZON, n_batch, 1, 1)                   # [T_HORIZON, N, n_state+n_ctrl, n_state+n_ctrl]
 
-    px = -torch.sqrt(goal_weights**2).unsqueeze(0) * x_goal_param  # [N, n_state]
-    zeros_u = torch.zeros((n_batch, n_ctrl), device=device)         # [N, n_ctrl]
-    p_all   = torch.cat((px, zeros_u), dim=1)                       # [N, n_state+n_ctrl]
+    # px = -torch.sqrt(goal_weights**2).unsqueeze(0) * x_goal_param  # [N, n_state]
+    # zeros_u = torch.zeros((n_batch, n_ctrl), device=device)         # [N, n_ctrl]
+    # p_all   = torch.cat((px, zeros_u), dim=1)                       # [N, n_state+n_ctrl]
+    px = -torch.sqrt(q_vector).unsqueeze(0) * x_goal_param
+    p_all= px
+
     c = p_all.unsqueeze(0).repeat(T_HORIZON, 1, 1)                 # [T_HORIZON, N, n_state+n_ctrl]
 
     x_batch = x_all
