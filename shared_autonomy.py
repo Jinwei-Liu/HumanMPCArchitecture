@@ -55,9 +55,11 @@ class HumanMPC:
         self.u_max = torch.tensor([100.0, 20.0, 20.0, 20.0], device=self.device)
 
     def step(self, state, aim):
-        aim[11:]=0
-        aim[4]=0
-        aim[5]=0
+        aim[4]=-0.009359
+        aim[5]=-0.010854
+        aim[11]=-0.086476
+        aim[12]=-0.072684
+        aim[13]=-0.014102
 
         n_batch = 1
         x_all = torch.from_numpy(state).float().to(self.device)
@@ -226,9 +228,9 @@ def main():
     
     rlhuman = RLHuman(state_dim, action_dim)
 
-    humanmodel = HumanMPC(goal_weights= [ 0.64711493,  0.66613936,  0.33236507, -0.20962556,  0.67796534,  0.49057913,
-                                        0.69507426,  0.15057886,  0.01199878,  0.23589016],
-                          ctrl_weights=[0.9341174,  0.97458977, 0.91246486, 0.9124608],T_HORIZON=30)
+    humanmodel = HumanMPC(goal_weights= [5.6658292e-01,  6.5920341e-01,  1.3426782e+00, -6.9367096e-02,
+                                        5.7875556e-01,  2.8636467e-01,  1.3181627e+00,  9.2517656e-01, -8.9726283e-04, -3.1130546e-01],
+                          ctrl_weights=[0.9346489,  0.92343575, 0.9992073,  0.78298324],T_HORIZON=50)
     
     assistvempc = AssistiveMPC(goal_weights=[1,1,1,1e-5,1e-5,1e-5,1e-5,1e-5,1e-5,1e-5],
                                ctrl_weights=[1,1,1,1],T_HORIZON=15)
@@ -265,7 +267,7 @@ def main():
         show_env.set_state(state[:10])
         hold_u_x = []
         hold_u_x.append(state[:10])
-        for _ in range(30):
+        for _ in range(50):
             hold_u_x.append(show_env.run(env_act))
         hold_u_x = np.array(hold_u_x)
         hold_u_x_array.append(hold_u_x)
@@ -309,6 +311,14 @@ def main():
     print("30 steps:")
     print(cal_error(state_array,store_predict_array,30))
     print(cal_error(state_array,hold_u_x_array,30))
+    
+    print("40 steps:")
+    print(cal_error(state_array,store_predict_array,40))
+    print(cal_error(state_array,hold_u_x_array,40))
+
+    print("50 steps:")
+    print(cal_error(state_array,store_predict_array,50))
+    print(cal_error(state_array,hold_u_x_array,50))
     
     # ax.scatter(aim_goal_array[:, 0], aim_goal_array[:, 1], aim_goal_array[:, 2], c='r', marker='o')
     ax.scatter(state_array[:, 0], state_array[:, 1], state_array[:, 2], c='b', marker='o')
