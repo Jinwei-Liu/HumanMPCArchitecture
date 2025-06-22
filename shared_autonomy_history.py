@@ -54,7 +54,7 @@ class HumanMPC:
         self.u_min = torch.tensor([0.0, -20.0, -20.0, -20.0], device=self.device)
         self.u_max = torch.tensor([100.0, 20.0, 20.0, 20.0], device=self.device)
 
-    def step(self, state, aim):
+    def step(self, state, aim, action):
         aim[4]=-0.009359
         aim[5]=-0.010854
         aim[11]=-0.086476
@@ -70,6 +70,7 @@ class HumanMPC:
 
         x_goal_param = torch.from_numpy(aim).float().to(self.device)
 
+        # 构造 C、c，调用 MPC 时传入 self.u_lower/self.u_upper
         q_vector = torch.cat((self.goal_weights**2, self.ctrl_weights**2), dim=0)
         Q_diag = torch.diag(q_vector)
         C = Q_diag.unsqueeze(0).unsqueeze(0).repeat(self.T_HORIZON, n_batch, 1, 1)
@@ -82,12 +83,17 @@ class HumanMPC:
         c = p_all.unsqueeze(0).repeat(self.T_HORIZON, 1, 1)
         cost = QuadCost(C, c)
 
+        u_init = torch.from_numpy(action).float().to(self.device)
+        u_init = u_init.repeat(self.T_HORIZON, 1, 1)
+
         ctrl = mpc.MPC(
             n_state=self.n_state,
             n_ctrl=self.n_ctrl,
             T=self.T_HORIZON,
             u_lower=self.u_lower,
             u_upper=self.u_upper,
+            u_init=u_init,
+            prev_ctrl=u_init,
             lqr_iter=5,
             grad_method=GradMethods.ANALYTIC,
             exit_unconverged=False,
@@ -145,6 +151,10 @@ class HumanMPC:
             nn_utils.clip_grad_norm_([x_goal_param], max_norm=1.0)
             optimizer_goal.step()
 
+            # print(f"Epoch {epoch:03d} | total_cost = {total_cost.item():.6f}")
+            # print(f"  grad norm x_goal_param = {x_goal_param.grad.norm().item():.6f}")
+            # print(f"  current x_goal_param = {x_goal_param.data.cpu().numpy()}")
+
         return x_goal_param.data.cpu().numpy()
     
 class AssistiveMPC:
@@ -160,10 +170,10 @@ class AssistiveMPC:
         self.u_min = torch.tensor([0.0, -20.0, -20.0, -20.0], device=self.device)
         self.u_max = torch.tensor([100.0, 20.0, 20.0, 20.0], device=self.device)
 
-    def run(self, machine_state, human_actions, human_states):
+    def run(self, machine_state, human_action, human_goal, human_goal_array, human_action_array):
         machine_state = torch.tensor(machine_state, dtype=torch.float32).to(self.device).unsqueeze(0)
-        human_action = torch.tensor(human_actions[0], dtype=torch.float32).to(self.device)
-        human_goal = torch.tensor(human_states[0], dtype=torch.float32).to(self.device)
+        human_action = torch.tensor(human_action, dtype=torch.float32).to(self.device)
+        human_goal = torch.tensor(human_goal, dtype=torch.float32).to(self.device)
         
         n_batch = 1
 
@@ -216,13 +226,13 @@ def main():
     action_high = env.action_space["high"]
     state_dim = env.observation_dim_human
     action_dim = action_low.shape[0]
-    
+
     rlhuman = RLHuman(state_dim, action_dim)
 
-    humanmodel = HumanMPC(goal_weights= [5.6658292e-01,  6.5920341e-01,  1.3426782e+00, -6.9367096e-02,
-                                        5.7875556e-01,  2.8636467e-01,  1.3181627e+00,  9.2517656e-01, -8.9726283e-04, -3.1130546e-01],
-                          ctrl_weights=[0.9346489,  0.92343575, 0.9992073,  0.78298324],T_HORIZON=50)
-    
+    humanmodel = HumanMPC(goal_weights= [0.48592252,  1.0113888,   1.2600814,   0.6299009,   0.6006764,   0.5896704,
+                                         0.4823741,   0.6857946,   0.02387187, -0.10714254],
+                          ctrl_weights=[0.9507001,  0.9647219,  0.94843996, 0.9586912], T_HORIZON=50)
+
     assistvempc = AssistiveMPC(goal_weights=[1,1,1,1e-5,1e-5,1e-5,1e-5,1e-5,1e-5,1e-5],
                                ctrl_weights=[1,1,1,1],T_HORIZON=15)
 
@@ -233,6 +243,8 @@ def main():
     rewards = 0.0
     state_array=[]
     aim_goal_array=[]
+    store_predict_array=[]
+    hold_u_x_array=[]
 
     states = collections.deque([state[:10]] * 100, maxlen=3)  # Adjust length as needed
     actions = collections.deque([np.zeros(action_dim)] * 100, maxlen=3)  # Same length as actions array
@@ -248,10 +260,21 @@ def main():
         actions.append(env_act)
 
         aim_goal = humanmodel.run(np.array(states), np.array(actions))
-        x, u =humanmodel.step(state[:10],aim_goal)
         # assistvempc_action = assistvempc.run(state[:10], env_act, aim_goal, _, _)
         # print(env_act, assistvempc_action)
         # env_act = assistvempc_action
+
+        show_env = Quadrotor_v0(0.01)
+        show_env.set_state(state[:10])
+        hold_u_x = []
+        hold_u_x.append(state[:10])
+        for _ in range(50):
+            hold_u_x.append(show_env.run(env_act))
+        hold_u_x = np.array(hold_u_x)
+        hold_u_x_array.append(hold_u_x)
+
+        x, u =humanmodel.step(state[:10],aim_goal,env_act)
+        store_predict_array.append(np.squeeze(x))
 
         state_array.append(state[:10])
         aim_goal_array.append(aim_goal)
@@ -271,11 +294,37 @@ def main():
 
     state_array = np.array(state_array)
     aim_goal_array = np.array(aim_goal_array)
+    store_predict_array = np.array(store_predict_array)
+    hold_u_x_array = np.array(hold_u_x_array)
 
+    print("5 steps:")
+    print(cal_error(state_array,store_predict_array,5))
+    print(cal_error(state_array,hold_u_x_array,5))
+
+    print("10 steps:")
+    print(cal_error(state_array,store_predict_array,10))
+    print(cal_error(state_array,hold_u_x_array,10))
+
+    print("20 steps:")
+    print(cal_error(state_array,store_predict_array,20))
+    print(cal_error(state_array,hold_u_x_array,20))
+    
+    print("30 steps:")
+    print(cal_error(state_array,store_predict_array,30))
+    print(cal_error(state_array,hold_u_x_array,30))
+    
+    print("40 steps:")
+    print(cal_error(state_array,store_predict_array,40))
+    print(cal_error(state_array,hold_u_x_array,40))
+
+    print("50 steps:")
+    print(cal_error(state_array,store_predict_array,50))
+    print(cal_error(state_array,hold_u_x_array,50))
+    
     # ax.scatter(aim_goal_array[:, 0], aim_goal_array[:, 1], aim_goal_array[:, 2], c='r', marker='o')
     ax.scatter(state_array[:, 0], state_array[:, 1], state_array[:, 2], c='b', marker='o')
-    # ax.scatter(store_predict_array[::20,:, 0], store_predict_array[::20,:, 1], store_predict_array[::20,:, 2], c='y', marker='o')
-    # ax.scatter(hold_u_x_array[::20,:, 0], hold_u_x_array[::20,:, 1], hold_u_x_array[::20,:, 2], c='g', marker='o')
+    ax.scatter(store_predict_array[::20,:15, 0], store_predict_array[::20,:15, 1], store_predict_array[::20,:15, 2], c='y', marker='o')
+    ax.scatter(hold_u_x_array[::20,:15, 0], hold_u_x_array[::20,:15, 1], hold_u_x_array[::20,:15, 2], c='g', marker='o')
 
     ax.set_xlabel("X Position")
     ax.set_ylabel("Y Position")
