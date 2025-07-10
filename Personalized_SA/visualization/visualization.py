@@ -9,7 +9,7 @@ def plot_state_3d(state_array,
                   gate_positions,
                   figsize_mm=(83, 70),
                   dpi=300,
-                  elev=25, azim=135,
+                  elev=90, azim=-90,
                   save_path=None,
                   show=True):
     """
@@ -51,29 +51,29 @@ def plot_state_3d(state_array,
     ax.plot(state_array[:, 0], state_array[:, 1], state_array[:, 2],
             c=c_obs, lw=0.7, alpha=0.9)
 
-    # 预测轨迹（散点 + 连线）
-    ax.scatter(store_predict_array[::20, :15, 0].ravel(),
-               store_predict_array[::20, :15, 1].ravel(),
-               store_predict_array[::20, :15, 2].ravel(),
-               c=c_pred, s=6, marker="^", edgecolors="none", alpha=0.70,
-               label="Predicted")
-    # 对每一条预测序列画线
-    for traj in store_predict_array[::20, :15]:
-        ax.plot(traj[:, 0], traj[:, 1], traj[:, 2],
-                c=c_pred, lw=0.6, alpha=0.65)
+    # # 预测轨迹（散点 + 连线）
+    # ax.scatter(store_predict_array[::20, :15, 0].ravel(),
+    #            store_predict_array[::20, :15, 1].ravel(),
+    #            store_predict_array[::20, :15, 2].ravel(),
+    #            c=c_pred, s=6, marker="^", edgecolors="none", alpha=0.70,
+    #            label="Predicted")
+    # # 对每一条预测序列画线
+    # for traj in store_predict_array[::20, :15]:
+    #     ax.plot(traj[:, 0], traj[:, 1], traj[:, 2],
+    #             c=c_pred, lw=0.6, alpha=0.65)
 
-    # 控制轨迹（可选：散点 + 连线）
-    ax.scatter(hold_u_x_array[::20, :15, 0].ravel(),
-                hold_u_x_array[::20, :15, 1].ravel(),
-                hold_u_x_array[::20, :15, 2].ravel(),
-                c=c_control, s=6, marker="s", edgecolors="none", alpha=0.65,
-                label="Control")
-    for traj in hold_u_x_array[::20, :15]:
-        ax.plot(traj[:, 0], traj[:, 1], traj[:, 2],
-                c=c_control, lw=0.6, alpha=0.55)
+    # # 控制轨迹（可选：散点 + 连线）
+    # ax.scatter(hold_u_x_array[::20, :15, 0].ravel(),
+    #             hold_u_x_array[::20, :15, 1].ravel(),
+    #             hold_u_x_array[::20, :15, 2].ravel(),
+    #             c=c_control, s=6, marker="s", edgecolors="none", alpha=0.65,
+    #             label="Control")
+    # for traj in hold_u_x_array[::20, :15]:
+    #     ax.plot(traj[:, 0], traj[:, 1], traj[:, 2],
+    #             c=c_control, lw=0.6, alpha=0.55)
     
     # -------- 添加门 --------
-    if gate_positions and len(gate_positions) > 0:
+    if len(gate_positions) > 0:
         # 门的尺寸参数
         gate_width = 1.5
         gate_height = 1.5
@@ -111,7 +111,7 @@ def plot_state_3d(state_array,
             
             # 创建3D多边形集合
             poly3d = [[vertices[idx] for idx in face] for face in faces]
-            gate = Poly3DCollection(poly3d, alpha=0.5, linewidths=1, edgecolors=c_gate)
+            gate = Poly3DCollection(poly3d, alpha=0.1, linewidths=1, edgecolors=c_gate)
             gate.set_facecolor(c_face)
             ax.add_collection3d(gate)
             
@@ -165,41 +165,41 @@ def plot_state_3d(state_array,
 
     return fig, ax
 
-# ─────────────────────────────────────────
-# 1. 随机生成示例数据
-# ─────────────────────────────────────────
-np.random.seed(42)        
+# # ─────────────────────────────────────────
+# # 1. 随机生成示例数据
+# # ─────────────────────────────────────────
+# np.random.seed(42)        
 
-# (1) 真实轨迹：3D 随机游走 (250 帧)
-N = 500
-state_steps = np.random.normal(scale=0.6, size=(N, 3))
-state_array = np.cumsum(state_steps, axis=0)
+# # (1) 真实轨迹：3D 随机游走 (250 帧)
+# N = 500
+# state_steps = np.random.normal(scale=0.6, size=(N, 3))
+# state_array = np.cumsum(state_steps, axis=0)
 
-# (2) 预测轨迹：对每隔 20 帧的时刻，向前预测 15 步
-idx  = np.arange(0, N, 20)      # 预测起点索引
-M, T = len(idx), 15
-store_predict_array = np.zeros((M, T, 3))
-for m, id0 in enumerate(idx):
-    base       = state_array[id0]
-    direction  = np.random.randn(3)
-    direction /= np.linalg.norm(direction)          # 归一化方向
-    steps      = np.linspace(0.4, 6.5, T).reshape(-1, 1)
-    store_predict_array[m] = base + direction * steps \
-                             + np.random.normal(scale=0.2, size=(T, 3))
+# # (2) 预测轨迹：对每隔 20 帧的时刻，向前预测 15 步
+# idx  = np.arange(0, N, 20)      # 预测起点索引
+# M, T = len(idx), 15
+# store_predict_array = np.zeros((M, T, 3))
+# for m, id0 in enumerate(idx):
+#     base       = state_array[id0]
+#     direction  = np.random.randn(3)
+#     direction /= np.linalg.norm(direction)          # 归一化方向
+#     steps      = np.linspace(0.4, 6.5, T).reshape(-1, 1)
+#     store_predict_array[m] = base + direction * steps \
+#                              + np.random.normal(scale=0.2, size=(T, 3))
 
-# (3) 控制轨迹：在预测值基础上再加少量噪声
-hold_u_x_array = store_predict_array \
-                 + np.random.normal(scale=0.3, size=store_predict_array.shape)
+# # (3) 控制轨迹：在预测值基础上再加少量噪声
+# hold_u_x_array = store_predict_array \
+#                  + np.random.normal(scale=0.3, size=store_predict_array.shape)
 
-# (4) 目标点：随便放一个
-aim_goal_array = np.array([[10, 10, 10]])
+# # (4) 目标点：随便放一个
+# aim_goal_array = np.array([[10, 10, 10]])
 
-# ─────────────────────────────────────────
-# 2. 画图，检验函数是否工作正常
-# ─────────────────────────────────────────
-plot_state_3d(state_array,
-              store_predict_array,
-              hold_u_x_array,
-              [[0,0,0], [5,5,5], [10,10,10]],  # 假设的门位置
-              save_path=None,        # 想保存就写 "demo_3d.pdf" / "demo_3d.png"
-              show=True)
+# # ─────────────────────────────────────────
+# # 2. 画图，检验函数是否工作正常
+# # ─────────────────────────────────────────
+# plot_state_3d(state_array,
+#               store_predict_array,
+#               hold_u_x_array,
+#               [[0,0,0], [5,5,5], [10,10,10]],  # 假设的门位置
+#               save_path=None,        # 想保存就写 "demo_3d.pdf" / "demo_3d.png"
+#               show=True)

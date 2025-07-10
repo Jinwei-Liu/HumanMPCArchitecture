@@ -277,19 +277,20 @@ def main():
     aim_goal_array = np.array(aim_goal_array)
     store_predict_array = np.array(store_predict_array)
     hold_u_x_array = np.array(hold_u_x_array)
+    gate_positions = np.array(env.gate_positions)
     np.savez_compressed(
         args.visualization_save_path,
         state_array=state_array,
         aim_goal_array=aim_goal_array,
         store_predict_array=store_predict_array,
         hold_u_x_array=hold_u_x_array,
-        gate_positions=env.gate_positions
+        gate_positions=gate_positions
     )
 
     plot_state_3d(state_array,
                 store_predict_array,
                 hold_u_x_array,
-                env.gate_positions,
+                gate_positions,
                 save_path="Prediction_error.pdf")
 
     print("5 steps:")
@@ -330,10 +331,12 @@ def draw_results():
     aim_goal_array = data['aim_goal_array']
     store_predict_array = data['store_predict_array']
     hold_u_x_array = data['hold_u_x_array']
+    gate_positions = data['gate_positions']
 
     plot_state_3d(state_array,
             store_predict_array,
-            hold_u_x_array)
+            hold_u_x_array,
+            gate_positions)
 
 if __name__ == "__main__":
-    main()
+    draw_results()
