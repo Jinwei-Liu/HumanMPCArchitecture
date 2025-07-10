@@ -51,16 +51,17 @@ def get_weights_and_paths(threshold_vel):
     load_model = f"./Personalized_SA/human_model/checkpoints/actor_{threshold_vel}.pth"
     visualization_save_path = f"./Personalized_SA/visualization/threshold_vel_{threshold_vel}.npz"
 
-    return goal_weights, ctrl_weights, save_path, load_model
+    return goal_weights, ctrl_weights, save_path, load_model, visualization_save_path
 
 # 获取根据threshold_vel变化的权重和路径
-goal_weights, ctrl_weights, save_path, load_model = get_weights_and_paths(args.threshold_vel)
+goal_weights, ctrl_weights, save_path, load_model, visualization_save_path = get_weights_and_paths(args.threshold_vel)
 
 # 更新args中的值
 args.goal_weights = goal_weights
 args.ctrl_weights = ctrl_weights
 args.save_path = save_path
 args.load_model = load_model
+args.visualization_save_path = visualization_save_path
 
 def set_seed(seed):
     # Set Python random seed
