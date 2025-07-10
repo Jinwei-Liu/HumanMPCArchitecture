@@ -13,9 +13,10 @@ import time
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..')))
 
 from Personalized_SA.env.quadrotor import Quadrotor_v0
+from Personalized_SA.config.config import args
 
 class QuadrotorRaceEnv:
-    def __init__(self, dt: float = 0.01, mode: str = 'none'):
+    def __init__(self, dt: float = 0.01, mode: str = 'none', threshold_vel: int = args.threshold_vel):
         """
         mode: 'human' for visualized environment (pybullet GUI),
               any other value skips rendering setup.
@@ -49,6 +50,9 @@ class QuadrotorRaceEnv:
             [-3.0, 3.0] 
         ])
 
+        # obstacle positions
+        self.obstacle_positions = np.array([1.5, 2.0, 1.5], dtype=np.float32)
+
         # Visualization handles
         self.gate_ids = []
 
@@ -77,7 +81,7 @@ class QuadrotorRaceEnv:
         self.gate_pass_reward   = 10.0
         self.dist_penalty_scale = 10.0
         self.vel_penalty_scale  = -1
-        self.threshold_vel = 3
+        self.threshold_vel = threshold_vel
         self.crash_penalty      = -0.0
         self.time_penalty       = -0.0
         self.history_reward_gate = None
@@ -112,7 +116,7 @@ class QuadrotorRaceEnv:
                 )
                 self.gate_ids.append(gid)
 
-        obs_machine = state.astype(np.float32)
+        obs_machine = np.concatenate([state, self.obstacle_positions]).astype(np.float32)
         current_gate = self.gate_positions[self.current_gate_idx]
         obs_human = np.concatenate([state, current_gate]).astype(np.float32)
 
@@ -157,7 +161,7 @@ class QuadrotorRaceEnv:
                 done = True
                 info['termination'] = 'all_gates_passed'
 
-        obs_machine = state.astype(np.float32)
+        obs_machine = np.concatenate([state, self.obstacle_positions]).astype(np.float32)
         next_gate = (
             self.gate_positions[self.current_gate_idx]
             if self.current_gate_idx < self.num_gates

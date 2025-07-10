@@ -219,12 +219,8 @@ def main():
     
     rlhuman = RLHuman(state_dim, action_dim)
 
-    humanmodel = HumanMPC(goal_weights= [5.6658292e-01,  6.5920341e-01,  1.3426782e+00, -6.9367096e-02,
-                                        5.7875556e-01,  2.8636467e-01,  1.3181627e+00,  9.2517656e-01, -8.9726283e-04, -3.1130546e-01],
-                          ctrl_weights=[0.9346489,  0.92343575, 0.9992073,  0.78298324],T_HORIZON=50)
-    
-    assistvempc = AssistiveMPC(goal_weights=[1,1,1,1e-5,1e-5,1e-5,1e-5,1e-5,1e-5,1e-5],
-                               ctrl_weights=[1,1,1,1],T_HORIZON=15)
+    humanmodel = HumanMPC(goal_weights= args.goal_weights,
+                          ctrl_weights= args.ctrl_weights, T_HORIZON=50)
 
     step_idx = 0
     done = False
@@ -248,10 +244,6 @@ def main():
         actions.append(env_act)
 
         aim_goal = humanmodel.run(np.array(states), np.array(actions))
-        x, u =humanmodel.step(state[:10],aim_goal)
-        # assistvempc_action = assistvempc.run(state[:10], env_act, aim_goal, _, _)
-        # print(env_act, assistvempc_action)
-        # env_act = assistvempc_action
 
         state_array.append(state[:10])
         aim_goal_array.append(aim_goal)

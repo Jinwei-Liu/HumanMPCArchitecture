@@ -129,18 +129,6 @@ class AssistiveMPC:
                 cbf_constraint = h_next - (1 - self.cbf_gamma) * h_curr
                 g.append(cbf_constraint)
         
-        # # 终端状态约束
-        # x_terminal_error = X[:, self.T_HORIZON] - X_human[:, -1]
-        # Q_terminal = ca.diag(self.goal_weights * 10)  # 终端权重
-        # obj += ca.mtimes([x_terminal_error.T, Q_terminal, x_terminal_error])
-        
-        # # 修改后的CBF约束：应用到所有时间步的状态
-        # # 为所有时间步(包括初始和终端)添加状态安全约束: h(x_t+k) ≥ 0
-        # for k in range(self.T_HORIZON + 1):  # 包括终端状态
-        #     for obs in self.obstacles:
-        #         h_state = self._barrier_function(X[:, k], obs)
-        #         g.append(h_state)  # 所有状态都必须在安全集内: h(x) ≥ 0
-        
         # 将变量展平为向量
         opt_variables = ca.vertcat(
             ca.reshape(X, -1, 1),
@@ -224,10 +212,6 @@ class AssistiveMPC:
         # 3. CBF梯度约束 (不等式 >= 0)
         self.lbg.extend([0.0] * n_cbf_constraints)
         self.ubg.extend([ca.inf] * n_cbf_constraints)
-        
-        # # 4. 所有状态的安全约束 (不等式 >= 0)
-        # self.lbg.extend([0.0] * n_safety_constraints)
-        # self.ubg.extend([ca.inf] * n_safety_constraints)
 
         self.lbg = ca.DM(self.lbg)
         self.ubg = ca.DM(self.ubg)
@@ -392,25 +376,25 @@ def test_assistive_mpc_integration():
     
     rlhuman = RLHuman(state_dim, action_dim)
 
-    humanmodel = HumanMPC(goal_weights= [5.6658292e-01,  6.5920341e-01,  1.3426782e+00, -6.9367096e-02,
-                                        5.7875556e-01,  2.8636467e-01,  1.3181627e+00,  9.2517656e-01, -8.9726283e-04, -3.1130546e-01],
-                          ctrl_weights=[0.9346489,  0.92343575, 0.9992073,  0.78298324],T_HORIZON=15)
-    
+    humanmodel = HumanMPC(goal_weights= args.goal_weights,
+                          ctrl_weights= args.ctrl_weights, T_HORIZON=15)
+
     # 创建AssistiveMPC - 关键修改：T_HORIZON要与humanmodel一致
     assistivempc = AssistiveMPC(
-        goal_weights=[1,1,1,1,1,1,1,1,1,1], #[1e-5,1e-5,1e-5,1e-5,1e-5,1e-5,1e-5,1e-5,1e-5,1e-5]
+        goal_weights=[1,1,1,1,1,1,1,1,1,1],
         ctrl_weights=[1,1,1,1],
         T_HORIZON=15,  # 使用较小的horizon用于MPC
         cbf_gamma=0.1
     )
     
-    # 添加障碍物
-    assistivempc.add_obstacle(x_obs=1.5, y_obs=2.0, z_obs=1.5, radius=1)
-    
     # === 仿真循环 ===
     step_idx = 0
     done = False
     obs_dict, _ = env.reset()
+    # 添加障碍物
+    machine_state = obs_dict["machine"]
+    assistivempc.add_obstacle(x_obs=machine_state[-3], y_obs=machine_state[-2], z_obs=machine_state[-1], radius=1)
+    
     state = obs_dict["human"]
     
     states = collections.deque([state[:10]] * 3, maxlen=3)
@@ -572,7 +556,6 @@ def test_assistive_mpc_integration():
         
         plt.tight_layout()
         plt.show()
-
 
 if __name__ == "__main__":
     test_assistive_mpc_integration()
