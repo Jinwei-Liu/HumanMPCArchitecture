@@ -216,12 +216,13 @@ def main():
     action_high = env.action_space["high"]
     state_dim = env.observation_dim_human
     action_dim = action_low.shape[0]
-    
+
     rlhuman = RLHuman(state_dim, action_dim)
 
-    humanmodel = HumanMPC(goal_weights= args.goal_weights,
-                          ctrl_weights= args.ctrl_weights, T_HORIZON=50)
-
+    humanmodel = HumanMPC(goal_weights= [0.48592252,  1.0113888,   1.2600814,   0.6299009,   0.6006764,   0.5896704,
+                                         0.4823741,   0.6857946,   0.02387187, -0.10714254],
+                          ctrl_weights=[0.9507001,  0.9647219,  0.94843996, 0.9586912], T_HORIZON=50)
+    
     step_idx = 0
     done = False
     obs_dict, _ = env.reset()
@@ -229,6 +230,8 @@ def main():
     rewards = 0.0
     state_array=[]
     aim_goal_array=[]
+    store_predict_array=[]
+    hold_u_x_array=[]
 
     states = collections.deque([state[:10]] * 100, maxlen=3)  # Adjust length as needed
     actions = collections.deque([np.zeros(action_dim)] * 100, maxlen=3)  # Same length as actions array
@@ -244,6 +247,18 @@ def main():
         actions.append(env_act)
 
         aim_goal = humanmodel.run(np.array(states), np.array(actions))
+
+        show_env = Quadrotor_v0(0.01)
+        show_env.set_state(state[:10])
+        hold_u_x = []
+        hold_u_x.append(state[:10])
+        for _ in range(50):
+            hold_u_x.append(show_env.run(env_act))
+        hold_u_x = np.array(hold_u_x)
+        hold_u_x_array.append(hold_u_x)
+
+        x, u =humanmodel.step(state[:10],aim_goal)
+        store_predict_array.append(np.squeeze(x))
 
         state_array.append(state[:10])
         aim_goal_array.append(aim_goal)
@@ -263,11 +278,37 @@ def main():
 
     state_array = np.array(state_array)
     aim_goal_array = np.array(aim_goal_array)
+    store_predict_array = np.array(store_predict_array)
+    hold_u_x_array = np.array(hold_u_x_array)
 
+    print("5 steps:")
+    print(cal_error(state_array,store_predict_array,5))
+    print(cal_error(state_array,hold_u_x_array,5))
+
+    print("10 steps:")
+    print(cal_error(state_array,store_predict_array,10))
+    print(cal_error(state_array,hold_u_x_array,10))
+
+    print("20 steps:")
+    print(cal_error(state_array,store_predict_array,20))
+    print(cal_error(state_array,hold_u_x_array,20))
+    
+    print("30 steps:")
+    print(cal_error(state_array,store_predict_array,30))
+    print(cal_error(state_array,hold_u_x_array,30))
+    
+    print("40 steps:")
+    print(cal_error(state_array,store_predict_array,40))
+    print(cal_error(state_array,hold_u_x_array,40))
+
+    print("50 steps:")
+    print(cal_error(state_array,store_predict_array,50))
+    print(cal_error(state_array,hold_u_x_array,50))
+    
     # ax.scatter(aim_goal_array[:, 0], aim_goal_array[:, 1], aim_goal_array[:, 2], c='r', marker='o')
     ax.scatter(state_array[:, 0], state_array[:, 1], state_array[:, 2], c='b', marker='o')
-    # ax.scatter(store_predict_array[::20,:, 0], store_predict_array[::20,:, 1], store_predict_array[::20,:, 2], c='y', marker='o')
-    # ax.scatter(hold_u_x_array[::20,:, 0], hold_u_x_array[::20,:, 1], hold_u_x_array[::20,:, 2], c='g', marker='o')
+    ax.scatter(store_predict_array[::20,:15, 0], store_predict_array[::20,:15, 1], store_predict_array[::20,:15, 2], c='y', marker='o')
+    ax.scatter(hold_u_x_array[::20,:15, 0], hold_u_x_array[::20,:15, 1], hold_u_x_array[::20,:15, 2], c='g', marker='o')
 
     ax.set_xlabel("X Position")
     ax.set_ylabel("Y Position")
