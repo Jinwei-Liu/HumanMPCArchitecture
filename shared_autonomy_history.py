@@ -9,6 +9,7 @@ from typing import Tuple
 from Personalized_SA.config.config import args
 from Personalized_SA.human_model.rlhuman import scale_to_env
 from Personalized_SA.dataset.test_create_data import visualize_path_and_gates
+from Personalized_SA.visualization.visualization import plot_state_3d
 class RLHuman:
     def __init__(
         self,
@@ -219,10 +220,9 @@ def main():
 
     rlhuman = RLHuman(state_dim, action_dim)
 
-    humanmodel = HumanMPC(goal_weights= [0.48592252,  1.0113888,   1.2600814,   0.6299009,   0.6006764,   0.5896704,
-                                         0.4823741,   0.6857946,   0.02387187, -0.10714254],
-                          ctrl_weights=[0.9507001,  0.9647219,  0.94843996, 0.9586912], T_HORIZON=50)
-    
+    humanmodel = HumanMPC(goal_weights= args.goal_weights,
+                          ctrl_weights= args.ctrl_weights, T_HORIZON=50)
+
     step_idx = 0
     done = False
     obs_dict, _ = env.reset()
@@ -273,13 +273,16 @@ def main():
 
     print(f"Total steps: {step_idx}, Total rewards: {rewards}")
 
-    fig = plt.figure(figsize=(10, 8))
-    ax = fig.add_subplot(111, projection='3d')
-
     state_array = np.array(state_array)
     aim_goal_array = np.array(aim_goal_array)
     store_predict_array = np.array(store_predict_array)
     hold_u_x_array = np.array(hold_u_x_array)
+    
+    fig, ax = plot_state_3d(state_array,
+                            store_predict_array,
+                            hold_u_x_array=hold_u_x_array,
+                            aim_goal_array=aim_goal_array,
+                            save_path="Prediction_error.pdf")
 
     print("5 steps:")
     print(cal_error(state_array,store_predict_array,5))
@@ -304,17 +307,7 @@ def main():
     print("50 steps:")
     print(cal_error(state_array,store_predict_array,50))
     print(cal_error(state_array,hold_u_x_array,50))
-    
-    # ax.scatter(aim_goal_array[:, 0], aim_goal_array[:, 1], aim_goal_array[:, 2], c='r', marker='o')
-    ax.scatter(state_array[:, 0], state_array[:, 1], state_array[:, 2], c='b', marker='o')
-    ax.scatter(store_predict_array[::20,:15, 0], store_predict_array[::20,:15, 1], store_predict_array[::20,:15, 2], c='y', marker='o')
-    ax.scatter(hold_u_x_array[::20,:15, 0], hold_u_x_array[::20,:15, 1], hold_u_x_array[::20,:15, 2], c='g', marker='o')
 
-    ax.set_xlabel("X Position")
-    ax.set_ylabel("Y Position")
-    ax.set_zlabel("Z Position")
-
-    plt.show()
     visualize_path_and_gates(
         start_pos=state_array[0],
         end_pos=state_array[-1],
