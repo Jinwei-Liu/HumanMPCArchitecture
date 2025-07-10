@@ -19,6 +19,7 @@ parser.add_argument("--gamma", type=float, default=0.99)
 parser.add_argument("--threshold_vel", type=int, default=2)
 parser.add_argument("--save_path", type=str, default=None)
 parser.add_argument("--load_model", type=str, default=None)
+parser.add_argument("--visualization_save_path", type=str, default=None)
 parser.add_argument("--goal_weights", type=float, default=None)
 parser.add_argument("--ctrl_weights", type=float, default=None)
 args = parser.parse_args()
@@ -48,6 +49,7 @@ def get_weights_and_paths(threshold_vel):
     # 设置路径中的数字
     save_path = f"./Personalized_SA/human_model/checkpoints/actor_{threshold_vel}.pth"
     load_model = f"./Personalized_SA/human_model/checkpoints/actor_{threshold_vel}.pth"
+    visualization_save_path = f"./Personalized_SA/visualization/threshold_vel_{threshold_vel}.npz"
 
     return goal_weights, ctrl_weights, save_path, load_model
 
