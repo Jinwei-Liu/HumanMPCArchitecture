@@ -3,9 +3,10 @@ import matplotlib as mpl
 import matplotlib.pyplot as plt
 from mpl_toolkits.mplot3d import Axes3D  # noqa: F401
 
-def plot_state_3d(state_array,
+def plot_state_3d(state_array, 
                   store_predict_array,
-                  hold_u_x_array=None,
+                  hold_u_x_array,
+                  gate_positions,
                   figsize_mm=(83, 70),
                   dpi=300,
                   elev=25, azim=135,
@@ -30,11 +31,13 @@ def plot_state_3d(state_array,
 
     # -------- 2. 颜色 --------
     c_obs, c_pred, c_control = "#4C72B0", "#DD8452", "#55A868"
+    c_gate = "#7F7F7F"
+    c_face = "#FFFFFF"
 
     # -------- 3. 数据整理 --------
     state_array         = np.asarray(state_array)
     store_predict_array = np.asarray(store_predict_array)
-    hold_u_x_array  = np.asarray(hold_u_x_array)
+    hold_u_x_array      = np.asarray(hold_u_x_array)
 
     # -------- 4. 画布 --------
     w, h = figsize_mm
@@ -55,23 +58,83 @@ def plot_state_3d(state_array,
                c=c_pred, s=6, marker="^", edgecolors="none", alpha=0.70,
                label="Predicted")
     # 对每一条预测序列画线
-    for traj in store_predict_array[::20]:
+    for traj in store_predict_array[::20, :15]:
         ax.plot(traj[:, 0], traj[:, 1], traj[:, 2],
                 c=c_pred, lw=0.6, alpha=0.65)
 
     # 控制轨迹（可选：散点 + 连线）
-    if hold_u_x_array is not None:
-        ax.scatter(hold_u_x_array[::20, :15, 0].ravel(),
-                   hold_u_x_array[::20, :15, 1].ravel(),
-                   hold_u_x_array[::20, :15, 2].ravel(),
-                   c=c_control, s=6, marker="s", edgecolors="none", alpha=0.65,
-                   label="Control")
-        for traj in hold_u_x_array[::20]:
-            ax.plot(traj[:, 0], traj[:, 1], traj[:, 2],
-                    c=c_control, lw=0.6, alpha=0.55)
+    ax.scatter(hold_u_x_array[::20, :15, 0].ravel(),
+                hold_u_x_array[::20, :15, 1].ravel(),
+                hold_u_x_array[::20, :15, 2].ravel(),
+                c=c_control, s=6, marker="s", edgecolors="none", alpha=0.65,
+                label="Control")
+    for traj in hold_u_x_array[::20, :15]:
+        ax.plot(traj[:, 0], traj[:, 1], traj[:, 2],
+                c=c_control, lw=0.6, alpha=0.55)
+    
+    # -------- 添加门 --------
+    if gate_positions and len(gate_positions) > 0:
+        # 门的尺寸参数
+        gate_width = 1.5
+        gate_height = 1.5
+        gate_depth = 0.5
+
+        from mpl_toolkits.mplot3d.art3d import Poly3DCollection
+        
+        # 绘制每个门
+        for gate_pos in gate_positions:
+            x, y, z = gate_pos
+            
+            # 创建门的顶点 - 垂直立方体
+            vertices = [
+                # 前面
+                [x-gate_width/2, y-gate_depth/2, z-gate_height/2],
+                [x+gate_width/2, y-gate_depth/2, z-gate_height/2],
+                [x+gate_width/2, y-gate_depth/2, z+gate_height/2],
+                [x-gate_width/2, y-gate_depth/2, z+gate_height/2],
+                # 后面
+                [x-gate_width/2, y+gate_depth/2, z-gate_height/2],
+                [x+gate_width/2, y+gate_depth/2, z-gate_height/2],
+                [x+gate_width/2, y+gate_depth/2, z+gate_height/2],
+                [x-gate_width/2, y+gate_depth/2, z+gate_height/2]
+            ]
+            
+            # 定义每个面的顶点索引
+            faces = [
+                [0, 1, 2, 3],  # 前面
+                [4, 5, 6, 7],  # 后面
+                [0, 3, 7, 4],  # 左面
+                [1, 2, 6, 5],  # 右面
+                [0, 1, 5, 4],  # 下面
+                [3, 2, 6, 7]   # 上面
+            ]
+            
+            # 创建3D多边形集合
+            poly3d = [[vertices[idx] for idx in face] for face in faces]
+            gate = Poly3DCollection(poly3d, alpha=0.5, linewidths=1, edgecolors=c_gate)
+            gate.set_facecolor(c_face)
+            ax.add_collection3d(gate)
+            
+            # 添加门框架的线条以增强立体感
+            edges = [
+                # 垂直边
+                [0, 3], [1, 2], [4, 7], [5, 6],
+                # 水平边
+                [0, 1], [3, 2], [4, 5], [7, 6],
+                # 深度边
+                [0, 4], [1, 5], [2, 6], [3, 7]
+            ]
+            
+            for edge in edges:
+                ax.plot3D(
+                    [vertices[edge[0]][0], vertices[edge[1]][0]],
+                    [vertices[edge[0]][1], vertices[edge[1]][1]],
+                    [vertices[edge[0]][2], vertices[edge[1]][2]],
+                    color=c_gate, linewidth=1
+                )
 
     # -------- 5. 坐标轴 --------
-    ax.set_xlim(-10, 10); ax.set_ylim(-5, 20); ax.set_zlim(-5, 20)
+    ax.set_xlim(-10, 10); ax.set_ylim(-5, 20); ax.set_zlim(-10, 10)
     ax.set_xlabel("X position"); ax.set_ylabel("Y position"); ax.set_zlabel("Z position")
 
     try: ax.set_box_aspect((1, 1, 1))
@@ -101,6 +164,7 @@ def plot_state_3d(state_array,
         plt.show()
 
     return fig, ax
+
 # ─────────────────────────────────────────
 # 1. 随机生成示例数据
 # ─────────────────────────────────────────
@@ -135,6 +199,7 @@ aim_goal_array = np.array([[10, 10, 10]])
 # ─────────────────────────────────────────
 plot_state_3d(state_array,
               store_predict_array,
-              hold_u_x_array=hold_u_x_array,
+              hold_u_x_array,
+              [[0,0,0], [5,5,5], [10,10,10]],  # 假设的门位置
               save_path=None,        # 想保存就写 "demo_3d.pdf" / "demo_3d.png"
               show=True)

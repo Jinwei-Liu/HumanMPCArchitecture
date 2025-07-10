@@ -282,12 +282,14 @@ def main():
         state_array=state_array,
         aim_goal_array=aim_goal_array,
         store_predict_array=store_predict_array,
-        hold_u_x_array=hold_u_x_array
+        hold_u_x_array=hold_u_x_array,
+        gate_positions=env.gate_positions
     )
 
     plot_state_3d(state_array,
                 store_predict_array,
-                hold_u_x_array=hold_u_x_array,
+                hold_u_x_array,
+                env.gate_positions,
                 save_path="Prediction_error.pdf")
 
     print("5 steps:")
@@ -331,7 +333,7 @@ def draw_results():
 
     plot_state_3d(state_array,
             store_predict_array,
-            hold_u_x_array=hold_u_x_array)
+            hold_u_x_array)
 
 if __name__ == "__main__":
     main()
