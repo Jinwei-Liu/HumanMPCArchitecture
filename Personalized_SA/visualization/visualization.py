@@ -134,7 +134,7 @@ def plot_state_3d(state_array,
                 )
 
     # -------- 5. 坐标轴 --------
-    ax.set_xlim(-10, 10); ax.set_ylim(-5, 20); ax.set_zlim(-10, 10)
+    ax.set_xlim(-10, 10); ax.set_ylim(-1, 20); ax.set_zlim(-10, 10)
     ax.set_xlabel("X position"); ax.set_ylabel("Y position"); ax.set_zlabel("Z position")
 
     try: ax.set_box_aspect((1, 1, 1))
