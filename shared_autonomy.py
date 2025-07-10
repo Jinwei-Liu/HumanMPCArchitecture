@@ -401,7 +401,7 @@ def test_assistive_mpc_integration():
         goal_weights=[1,1,1,1,1,1,1,1,1,1], #[1e-5,1e-5,1e-5,1e-5,1e-5,1e-5,1e-5,1e-5,1e-5,1e-5]
         ctrl_weights=[1,1,1,1],
         T_HORIZON=15,  # 使用较小的horizon用于MPC
-        cbf_gamma=0.3
+        cbf_gamma=0.1
     )
     
     # 添加障碍物
