@@ -374,7 +374,7 @@ class AssistiveMPC:
 
 # 测试函数
 from Personalized_SA.env.quadrotor_env import QuadrotorRaceEnv
-from shared_autonomy import RLHuman, HumanMPC
+from shared_autonomy_history import RLHuman, HumanMPC
 def test_assistive_mpc_integration():
     """测试AssistiveMPC与shared_autonomy.py的整合"""
     import collections
