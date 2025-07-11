@@ -56,11 +56,11 @@ class HumanMPC:
         self.u_max = torch.tensor([100.0, 20.0, 20.0, 20.0], device=self.device)
 
     def step(self, state, aim):
-        aim[4]=-0.009359
-        aim[5]=-0.010854
-        aim[11]=-0.086476
-        aim[12]=-0.072684
-        aim[13]=-0.014102
+        aim[4]=0
+        aim[5]=0
+        aim[11]=0
+        aim[12]=0
+        aim[13]=0
 
         n_batch = 1
         x_all = torch.from_numpy(state).float().to(self.device)
@@ -339,4 +339,4 @@ def draw_results():
             gate_positions)
 
 if __name__ == "__main__":
-    draw_results()
+    main()

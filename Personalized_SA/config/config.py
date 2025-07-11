@@ -16,7 +16,7 @@ parser.add_argument("--alpha", type=float, default=0.1)
 parser.add_argument("--adaptive_alpha", action="store_true", default=True)
 parser.add_argument("--no_adaptive_alpha", dest="adaptive_alpha", action="store_false")
 parser.add_argument("--gamma", type=float, default=0.99)
-parser.add_argument("--threshold_vel", type=int, default=1)
+parser.add_argument("--threshold_vel", type=int, default=3)
 parser.add_argument("--save_path", type=str, default=None)
 parser.add_argument("--load_model", type=str, default=None)
 parser.add_argument("--visualization_save_path", type=str, default=None)
@@ -33,8 +33,9 @@ def get_weights_and_paths(threshold_vel):
             [0.91950536, 1.0036246,  1.0717165,  0.83069456]),
         2: ([5.5969411e-01,  6.4742762e-01,  1.3425535e+00, -6.7092597e-02, 5.7851774e-01,  2.7476832e-01,  1.3581213e+00,  9.1315401e-01, 4.5179841e-04, -3.1501690e-01],
             [0.93467546, 0.9207936,  1.0009099,  0.7802]),
-        3: ([0.26507884, 0.96189415, 1.3121976, 0.6107403, 0.18111606, 0.3404058, 1.1088537, -0.44270095, 0.24729586, -0.10584562],
-            [0.9446432, 0.8682919, 0.8690304, 0.9767915]),
+        3: ([0.385296, 0.46608075, 1.4231076, 0.83612144, 0.37422276, 0.48151472,
+              0.5658459, -0.7715509, -0.17087519, -0.08898538],
+            [0.9483139, 0.9310269, 0.99406433, 0.95167077]),
         4: ([4.7160548e-01,  2.1757884e+00,  1.2288764e+00,  8.3170748e-01, 5.9110194e-01,  4.2550918e-01,  4.9684775e-01,  6.6608697e-01, -8.8014250e-04, -1.3107462e-01],
             [0.94496953, 0.90043503, 0.98253006, 1.027343]),
         5: ([0.44215772,  0.9167447,   1.2566036,   0.55440533,  0.51803297,  0.5302971, 0.63869774,  0.746156, 0.0783285,  -0.09809528],
