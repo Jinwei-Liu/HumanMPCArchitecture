@@ -39,10 +39,11 @@ class QuadrotorRaceEnv:
         self.gate_radius = 0.5
         self.current_gate_idx = 0
         self.gate_positions_raw = np.array([
-            [2.0, 5.0, 2.0],
-            [-2.0, 10.0, 2.0],
-            [2.0, 15.0, 2.0],
-            [-2.0, 20.0, 2.0]
+            [2.0, 2.0, 2.0],
+            [-2.0, 7.0, 2.0],
+            [2.0, 12.0, 2.0],
+            [-2.0, 17.0, 2.0],
+            [0.0, 20.0, 2.0]
         ], dtype=np.float32)
         self.noise_bounds = np.array([
             [-0.5, 0.5],  
