@@ -50,10 +50,10 @@ class Quadrotor_v0(object):
         self._state[kPosZ] = np.random.uniform(
             low=self._xyz_dist[2, 0], high=self._xyz_dist[2, 1])
         
-        # initialize rotation, randomly
-        quad_quat0 = np.random.uniform(low=0.0, high=1, size=4)
-        # normalize the quaternion
-        self._state[kQuatW:kQuatZ+1] = quad_quat0 / np.linalg.norm(quad_quat0)
+        # # initialize rotation, randomly
+        # quad_quat0 = np.random.uniform(low=0.0, high=1, size=4)
+        # # normalize the quaternion
+        # self._state[kQuatW:kQuatZ+1] = quad_quat0 / np.linalg.norm(quad_quat0)
         
         # initialize velocity, randomly
         self._state[kVelX] = np.random.uniform(
