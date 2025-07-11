@@ -137,6 +137,22 @@ def create_sequences(states, actions, sequence_length=3, predict_steps=50):
     
     return np.array(sequences), np.array(targets)
 
+def combine_multiple_episodes_data(episodes_data, sequence_length=3, predict_steps=50):
+    """合并多个episode的数据创建训练序列"""
+    all_sequences = []
+    all_targets = []
+    
+    for states, actions in episodes_data:
+        sequences, targets = create_sequences(states, actions, sequence_length, predict_steps)
+        all_sequences.append(sequences)
+        all_targets.append(targets)
+    
+    # 合并所有episode的数据
+    combined_sequences = np.concatenate(all_sequences, axis=0)
+    combined_targets = np.concatenate(all_targets, axis=0)
+    
+    return combined_sequences, combined_targets
+
 def train_model(model, train_loader, device, epochs=100):
     """训练神经网络模型"""
     criterion = nn.MSELoss()
@@ -360,9 +376,12 @@ def main():
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
     print(f"Using device: {device}")
     
+    # 超参数设置
+    num_episodes = 10
+    num_train_episodes = 5  # 新增超参数：用于训练的episode数量
+    
     # 收集多轮数据
     print("Collecting episode data...")
-    num_episodes = 5
     all_episodes_data = []
     
     for episode in range(num_episodes):
@@ -371,19 +390,20 @@ def main():
         all_episodes_data.append((states, actions))
         print(f"Episode {episode + 1}: {len(states)} steps")
     
-    # 选择训练和测试数据
-    train_episode_idx = 0  # 使用第一个episode进行训练
-    test_episodes_idx = list(range(1, num_episodes))  # 其余episode用于测试
+    # 数据划分：前num_train_episodes个episode用于训练，其余用于测试
+    train_episodes_idx = list(range(num_train_episodes))
+    test_episodes_idx = list(range(num_train_episodes, num_episodes))
     
-    print(f"\nUsing episode {train_episode_idx + 1} for training")
+    print(f"\nUsing episodes {[i+1 for i in train_episodes_idx]} for training")
     print(f"Using episodes {[i+1 for i in test_episodes_idx]} for testing")
     
-    # 准备训练数据
-    train_states, train_actions = all_episodes_data[train_episode_idx]
-    train_sequences, train_targets = create_sequences(train_states, train_actions, 
-                                                     sequence_length=3, predict_steps=50)
+    # 准备训练数据：合并多个训练episode的数据
+    train_episodes_data = [all_episodes_data[i] for i in train_episodes_idx]
+    train_sequences, train_targets = combine_multiple_episodes_data(
+        train_episodes_data, sequence_length=3, predict_steps=50
+    )
     
-    print(f"Training data: {len(train_sequences)} sequences")
+    print(f"Training data: {len(train_sequences)} sequences from {num_train_episodes} episodes")
     
     # 创建数据加载器
     train_dataset = PredictionDataset(train_sequences, train_targets)
@@ -411,7 +431,7 @@ def main():
         for i in range(len(test_sequences)):
             test_data.append((test_sequences[i], test_targets[i]))
     
-    print(f"Test data: {len(test_data)} sequences")
+    print(f"Test data: {len(test_data)} sequences from {len(test_episodes_idx)} episodes")
     
     # 评估模型
     print("\nEvaluating model...")
@@ -432,26 +452,26 @@ def main():
     print(summary_df.to_string(index=False))
     
     # 保存汇总表
-    summary_df.to_csv('Personalized_SA/nn_prediction/state_wise_prediction_errors.csv', index=False)
-    print("\nSummary table saved as 'state_wise_prediction_errors.csv'")
+    summary_df.to_csv(f'Personalized_SA/nn_prediction/state_wise_prediction_errors_train{num_train_episodes}.csv', index=False)
+    print(f"\nSummary table saved as 'state_wise_prediction_errors_train{num_train_episodes}.csv'")
     
     # 绘制可视化结果
-    plot_error_heatmap(state_wise_results, "Personalized_SA/nn_prediction/state_wise_error_heatmap.png")
-    plot_error_trends(state_wise_results, "Personalized_SA/nn_prediction/state_wise_error_trends.png")
+    plot_error_heatmap(state_wise_results, f"Personalized_SA/nn_prediction/state_wise_error_heatmap_train{num_train_episodes}.png")
+    plot_error_trends(state_wise_results, f"Personalized_SA/nn_prediction/state_wise_error_trends_train{num_train_episodes}.png")
 
     # 绘制训练损失
     plt.figure(figsize=(10, 6))
     plt.plot(train_losses)
-    plt.title('Training Loss')
+    plt.title(f'Training Loss (Using {num_train_episodes} Episodes)')
     plt.xlabel('Epoch')
     plt.ylabel('MSE Loss')
     plt.grid(True)
-    plt.savefig("Personalized_SA/nn_prediction/training_loss.png", dpi=300, bbox_inches='tight')
+    plt.savefig(f"Personalized_SA/nn_prediction/training_loss_train{num_train_episodes}.png", dpi=300, bbox_inches='tight')
     plt.show()
     
     # 保存模型
-    torch.save(model.state_dict(), 'Personalized_SA/nn_prediction/human_behavior_predictor.pth')
-    print("\nModel saved as 'human_behavior_predictor.pth'")
+    torch.save(model.state_dict(), f'Personalized_SA/nn_prediction/human_behavior_predictor_train{num_train_episodes}.pth')
+    print(f"\nModel saved as 'human_behavior_predictor_train{num_train_episodes}.pth'")
 
 if __name__ == "__main__":
     main()

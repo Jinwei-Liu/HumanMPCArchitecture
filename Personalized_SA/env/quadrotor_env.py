@@ -35,7 +35,7 @@ class QuadrotorRaceEnv:
         self.observation_dim_human = self.quad.s_dim + 3  # 3 for gate position (x, y, z)
 
         # Gate trajectory parameters
-        self.num_gates = 4
+        self.num_gates = 5
         self.gate_radius = 0.5
         self.current_gate_idx = 0
         self.gate_positions_raw = np.array([
