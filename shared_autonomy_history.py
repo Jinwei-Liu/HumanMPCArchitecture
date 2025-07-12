@@ -290,5 +290,5 @@ def draw_results():
 
 
 if __name__ == "__main__":
-    main()
-    # draw_results()
+    # main()
+    draw_results()

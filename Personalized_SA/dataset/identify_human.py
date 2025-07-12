@@ -10,7 +10,7 @@ import torch.nn.utils as nn_utils
 from Personalized_SA.config.config import args
 
 # Load pre-recorded actions and states from a human model
-actions, states = test(args, temperature=0.01)
+actions, states = test(args, temperature=1, mode=None)
 actions = np.array(actions)
 states = np.array(states)
 
@@ -38,7 +38,7 @@ x_goal_init = torch.cat((x_all, action_all), dim=1)
 
 # Define column indices that require shared parameters.
 # All values within each of these columns will use the same scalar parameter.
-shared_columns = []
+shared_columns = [4,5,11,12,13]
 total_dims = n_state + n_ctrl
 
 # Create parameters for each column

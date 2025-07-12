@@ -127,12 +127,12 @@ def train(args):
     env.close()
     writer.close()
 
-def test(args, temperature=1.0):
+def test(args, temperature=1.0, mode='human'):
     """
     Load a trained SAC actor (or use a fresh/random agent) and run a single test episode.
     Visualize the planned vs. actual path.
     """
-    env = QuadrotorRaceEnv(dt=0.01, mode='human')
+    env = QuadrotorRaceEnv(dt=0.01, mode=mode)
     action_low = env.action_space["low"]
     action_high = env.action_space["high"]
     state_dim = env.observation_dim_human
@@ -205,5 +205,5 @@ def test(args, temperature=1.0):
 from Personalized_SA.config.config import args
 
 if __name__ == "__main__":
-    # train(args)
-    test(args, temperature=0.01)
+    train(args)
+    # test(args, temperature=1)
