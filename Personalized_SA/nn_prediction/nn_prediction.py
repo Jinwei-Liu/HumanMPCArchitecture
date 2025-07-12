@@ -452,12 +452,12 @@ def main():
     print(summary_df.to_string(index=False))
     
     # 保存汇总表
-    summary_df.to_csv(f'Personalized_SA/nn_prediction/state_wise_prediction_errors_train{num_train_episodes}.csv', index=False)
-    print(f"\nSummary table saved as 'state_wise_prediction_errors_train{num_train_episodes}.csv'")
-    
+    summary_df.to_csv(f'Personalized_SA/nn_prediction/state_wise_prediction_errors_train{args.threshold_vel}.csv', index=False)
+    print(f"\nSummary table saved as 'state_wise_prediction_errors_train{args.threshold_vel}.csv'")
+
     # 绘制可视化结果
-    plot_error_heatmap(state_wise_results, f"Personalized_SA/nn_prediction/state_wise_error_heatmap_train{num_train_episodes}.png")
-    plot_error_trends(state_wise_results, f"Personalized_SA/nn_prediction/state_wise_error_trends_train{num_train_episodes}.png")
+    plot_error_heatmap(state_wise_results, f"Personalized_SA/nn_prediction/state_wise_error_heatmap_train{args.threshold_vel}.png")
+    plot_error_trends(state_wise_results, f"Personalized_SA/nn_prediction/state_wise_error_trends_train{args.threshold_vel}.png")
 
     # 绘制训练损失
     plt.figure(figsize=(10, 6))
@@ -466,12 +466,12 @@ def main():
     plt.xlabel('Epoch')
     plt.ylabel('MSE Loss')
     plt.grid(True)
-    plt.savefig(f"Personalized_SA/nn_prediction/training_loss_train{num_train_episodes}.png", dpi=300, bbox_inches='tight')
+    plt.savefig(f"Personalized_SA/nn_prediction/training_loss_train{args.threshold_vel}.png", dpi=300, bbox_inches='tight')
     plt.show()
     
     # 保存模型
-    torch.save(model.state_dict(), f'Personalized_SA/nn_prediction/human_behavior_predictor_train{num_train_episodes}.pth')
-    print(f"\nModel saved as 'human_behavior_predictor_train{num_train_episodes}.pth'")
+    torch.save(model.state_dict(), f'Personalized_SA/nn_prediction/human_behavior_predictor_train{args.threshold_vel}.pth')
+    print(f"\nModel saved as 'human_behavior_predictor_train{args.threshold_vel}.pth'")
 
 if __name__ == "__main__":
     main()
