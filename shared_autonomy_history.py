@@ -134,6 +134,7 @@ class HumanMPC:
                 grad_method=GradMethods.ANALYTIC,
                 exit_unconverged=False,
                 detach_unconverged=False,
+                backprop=True,
                 verbose=0
             )
             _, u_opt, _ = ctrl(x_all, cost, self.quad)
@@ -148,53 +149,6 @@ class HumanMPC:
 
         return x_goal_param.data.cpu().numpy()
     
-class AssistiveMPC:
-    def __init__(self, goal_weights, ctrl_weights, DT=0.01, T_HORIZON=15):
-        self.DT = DT
-        self.T_HORIZON = T_HORIZON
-        self.quad = Quadrotor_MPC(self.DT)
-        self.n_state, self.n_ctrl = self.quad.s_dim, self.quad.a_dim
-        self.device = args.device
-        self.goal_weights = torch.Tensor(goal_weights).to(self.device)
-        self.ctrl_weights = torch.Tensor(ctrl_weights).to(self.device)
-
-        self.u_min = torch.tensor([0.0, -20.0, -20.0, -20.0], device=self.device)
-        self.u_max = torch.tensor([100.0, 20.0, 20.0, 20.0], device=self.device)
-
-    def run(self, machine_state, human_actions, human_states):
-        machine_state = torch.tensor(machine_state, dtype=torch.float32).to(self.device).unsqueeze(0)
-        human_action = torch.tensor(human_actions[0], dtype=torch.float32).to(self.device)
-        human_goal = torch.tensor(human_states[0], dtype=torch.float32).to(self.device)
-        
-        n_batch = 1
-
-        q = torch.cat((self.goal_weights, self.ctrl_weights))
-        C = torch.diag(q).unsqueeze(0).unsqueeze(0).repeat(self.T_HORIZON, n_batch, 1, 1)
-
-        u_lower = self.u_min.repeat(self.T_HORIZON, 1, 1)   # (T_HORIZON, 4)
-        u_upper = self.u_max.repeat(self.T_HORIZON, 1, 1)   # (T_HORIZON, 4)
-    
-        x_aim =  torch.cat((human_goal, human_action))
-        p = -torch.sqrt(q)*x_aim
-
-        c = p.unsqueeze(0).repeat(self.T_HORIZON, n_batch, 1)
-
-        cost = QuadCost(C, c)
-
-        ctrl = mpc.MPC(n_state=self.n_state,
-                       n_ctrl=self.n_ctrl,
-                       T=self.T_HORIZON,
-                       u_lower=u_lower,
-                       u_upper=u_upper,
-                       lqr_iter=3,
-                       grad_method=GradMethods.ANALYTIC,
-                       exit_unconverged=False,
-                       detach_unconverged=False,
-                       verbose=0)
-        _, u_opt, _ = ctrl(machine_state, cost, self.quad)
-        
-        return u_opt[0,0].detach().cpu().numpy()
-
 def cal_error(true_states, predict_states, predict_steps):
     true_steps = true_states.shape[0]
     errors_list = []
@@ -336,4 +290,5 @@ def draw_results():
 
 
 if __name__ == "__main__":
-    draw_results()
+    main()
+    # draw_results()
