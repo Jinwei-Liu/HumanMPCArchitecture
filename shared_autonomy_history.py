@@ -287,12 +287,29 @@ def main():
         gate_positions=gate_positions
     )
 
-    plot_state_3d(state_array,
-                store_predict_array,
-                hold_u_x_array,
-                gate_positions,
-                save_path="Prediction_error.pdf")
+    draw_results()
 
+    visualize_path_and_gates(
+        start_pos=state_array[0],
+        end_pos=state_array[-1],
+        gate_positions=env.gate_positions,
+        path=aim_goal_array,
+        true_path=state_array
+    )
+
+def draw_results():
+    data = np.load(args.visualization_save_path)
+    state_array = data['state_array']
+    aim_goal_array = data['aim_goal_array']
+    store_predict_array = data['store_predict_array']
+    hold_u_x_array = data['hold_u_x_array']
+    gate_positions = data['gate_positions']
+
+    plot_state_3d(state_array,
+            store_predict_array,
+            hold_u_x_array,
+            gate_positions)
+    
     print("5 steps:")
     print(cal_error(state_array,store_predict_array,5))
     print(cal_error(state_array,hold_u_x_array,5))
@@ -317,26 +334,6 @@ def main():
     print(cal_error(state_array,store_predict_array,50))
     print(cal_error(state_array,hold_u_x_array,50))
 
-    visualize_path_and_gates(
-        start_pos=state_array[0],
-        end_pos=state_array[-1],
-        gate_positions=env.gate_positions,
-        path=aim_goal_array,
-        true_path=state_array
-    )
-
-def draw_results():
-    data = np.load(args.visualization_save_path)
-    state_array = data['state_array']
-    aim_goal_array = data['aim_goal_array']
-    store_predict_array = data['store_predict_array']
-    hold_u_x_array = data['hold_u_x_array']
-    gate_positions = data['gate_positions']
-
-    plot_state_3d(state_array,
-            store_predict_array,
-            hold_u_x_array,
-            gate_positions)
 
 if __name__ == "__main__":
-    main()
+    draw_results()
