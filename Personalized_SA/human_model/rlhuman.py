@@ -205,5 +205,5 @@ def test(args, temperature=1.0, mode='human'):
 from Personalized_SA.config.config import args
 
 if __name__ == "__main__":
-    train(args)
-    # test(args, temperature=1)
+    # train(args)
+    test(args, temperature=1)
