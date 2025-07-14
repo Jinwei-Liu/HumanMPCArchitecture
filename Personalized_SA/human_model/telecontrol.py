@@ -12,6 +12,10 @@ sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '.
 # Import the QuadrotorRaceEnv from your existing code
 from Personalized_SA.env.quadrotor_env import QuadrotorRaceEnv
 
+SAVE_DIR   = "./Personalized_SA/human_model/true_human"       #​ ← 保存到这里
+MAX_STEPS  = 5000                 # ← 自己设定回合最大步​数
+os.makedirs(SAVE_DIR, exist_ok=True)
+
 class RemoteController:
     """
     Class to interface with a quadrotor remote controller using pygame joystick.
@@ -171,7 +175,9 @@ def control_quadrotor():
     # Initialize the environment with visualization
     env = QuadrotorRaceEnv(dt=0.01, mode='control')
     obs, _ = env.reset(seed=42)
-    
+    states_history  = []
+    actions_history = []
+
     # Initialize the controller
     controller = RemoteController()
     if not controller.start():
@@ -188,12 +194,13 @@ def control_quadrotor():
         step_count = 0
         
         # Main control loop
-        while not done:
+        while not done and step_count < MAX_STEPS:
             # Get action from controller
             action = controller.get_action()
-            
+            actions_history.append(action.copy())
             # Apply action to environment
             obs, reward, done, info = env.step(action)
+            states_history.append(obs["human"].copy())
             
             # Render the environment
             env.render()
@@ -212,16 +219,23 @@ def control_quadrotor():
                     print(f"Info: {info}")
             
             # Small delay to maintain simulation speed
-            time.sleep(0.03)
+            time.sleep(0.05)
     
     except KeyboardInterrupt:
         print("\nControl ended by user.")
     finally:
+        states_arr  = np.asarray(states_history,  dtype=np.float32)
+        actions_arr = np.asarray(actions_history, dtype=np.float32)
+        tstr = time.strftime("%Y%m%d-%H%M%S")
+        np.save(os.path.join(SAVE_DIR, f"states_{tstr}.npy"),  states_arr)
+        np.save(os.path.join(SAVE_DIR, f"actions_{tstr}.npy"), actions_arr)
+        print(f"Saved episode to {SAVE_DIR}/states_{tstr}.npy 和 actions_{tstr}.npy")
+        print(f"Shape: states {states_arr.shape}, actions {actions_arr.shape}")
+        
         # Clean up
         controller.stop()
         env.close()
         print(f"Final stats - Total reward: {total_reward:.2f}, Steps: {step_count}")
-
 
 def keyboard_control():
     """
