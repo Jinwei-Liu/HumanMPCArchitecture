@@ -429,8 +429,7 @@ def MPC_prediction():
 
     statess = collections.deque([state[:10]] * 100, maxlen=3)  # Adjust length as needed
     actionss = collections.deque([np.zeros(4)] * 100, maxlen=3)  # Same length as actions array
-
-    for step_idx in range(len(states)):
+    for step_idx in range(len(states)-1):
         print(f"Step {step_idx}")
         # Sample an action in [-1, 1] and scale to environment bounds
         env_act = actions[step_idx]
