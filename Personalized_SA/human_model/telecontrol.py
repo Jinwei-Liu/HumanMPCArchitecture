@@ -83,13 +83,13 @@ class RemoteController:
                 # Different controllers might have different axis mappings
                 # Common mapping for quadrotor-like controllers:
                 # Left stick vertical (throttle)
-                self.throttle = -self.controller.get_axis(1) * 0.5 + 0.5  # Convert -1:1 to 0:1
+                self.throttle = self.controller.get_axis(2) * 0.5 + 0.5  # Normalize to 0-1
                 # Left stick horizontal (yaw)
                 self.yaw = self.controller.get_axis(0)
                 # Right stick vertical (pitch)
-                self.pitch = self.controller.get_axis(3)
+                self.pitch = self.controller.get_axis(1)
                 # Right stick horizontal (roll)
-                self.roll = self.controller.get_axis(2)
+                self.roll = self.controller.get_axis(3)
             
             # Small sleep to prevent CPU hogging
             time.sleep(0.01)
@@ -365,7 +365,7 @@ if __name__ == "__main__":
     import argparse
     
     parser = argparse.ArgumentParser(description='Quadrotor Remote Controller')
-    parser.add_argument('--mode', type=str, default='test', 
+    parser.add_argument('--mode', type=str, default='control', 
                         choices=['test', 'control', 'keyboard'],
                         help='Mode to run: test (controller only), control (with quadrotor), keyboard')
     

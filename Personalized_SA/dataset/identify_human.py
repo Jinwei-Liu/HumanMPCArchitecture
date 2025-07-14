@@ -23,7 +23,7 @@ print("action_arr.shape:", action_arr.shape)
 print("x_goal_arr.shape:", x_goal_arr.shape)
 
 DT = 0.01          # Integration step size (s)
-T_HORIZON = 15     # MPC prediction steps
+T_HORIZON = 50     # MPC prediction steps
 
 quad = Quadrotor_MPC(DT)
 n_state = quad.s_dim
@@ -38,7 +38,7 @@ x_goal_init = torch.cat((x_all, action_all), dim=1)
 
 # Define column indices that require shared parameters.
 # All values within each of these columns will use the same scalar parameter.
-shared_columns = [4,5,11,12,13]
+shared_columns = []
 total_dims = n_state + n_ctrl
 
 # Create parameters for each column

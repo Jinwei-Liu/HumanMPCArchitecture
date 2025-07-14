@@ -165,41 +165,131 @@ def plot_state_3d(state_array,
 
     return fig, ax
 
-# # ─────────────────────────────────────────
-# # 1. 随机生成示例数据
-# # ─────────────────────────────────────────
-# np.random.seed(42)        
+import pandas as pd
+import matplotlib.pyplot as plt
+import numpy as np
+import seaborn as sns
+import os
+import sys
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..')))
+from Personalized_SA.config.config import args
 
-# # (1) 真实轨迹：3D 随机游走 (250 帧)
-# N = 500
-# state_steps = np.random.normal(scale=0.6, size=(N, 3))
-# state_array = np.cumsum(state_steps, axis=0)
+def create_comparison_plot(threshold_vel=1):
+    # 读取三个CSV文件
+    file_names = [
+        f'./Personalized_SA/visualization/threshold_vel_{threshold_vel}_hold_u_x_metrics.csv',
+        f'./Personalized_SA/visualization/threshold_vel_{threshold_vel}_store_predict_metrics.csv',
+        f'./Personalized_SA/visualization/threshold_vel_{threshold_vel}_nn_metrics.csv'
+    ]
+    
+    # 读取数据
+    dataframes = []
+    labels = ['Hold U X', 'Store Predict', 'NN']
+    
+    for file_name in file_names:
+        try:
+            df = pd.read_csv(file_name)
+            dataframes.append(df)
+        except FileNotFoundError:
+            print(f"文件 {file_name} 未找到")
+            return
+    
+    # 设置绘图风格
+    plt.style.use('default')
+    sns.set_palette("Set1")
+    
+    # 定义步数和状态
+    steps = [5, 10, 20, 30, 40, 50]
+    states_to_plot = ['x', 'y', 'z', 'qw', 'qx', 'qy','qz','vx','vy','vz']  # 选择10个状态进行绘图
+    
+    # 创建子图 - 为legend留出空间
+    fig, axes = plt.subplots(1, 10, figsize=(22, 3))
+    axes = axes.flatten()
+    
+    colors = ['#1f77b4', '#ff7f0e', '#2ca02c']  # 三种不同颜色
+    
+    # 用于存储legend的handles和labels
+    legend_handles = []
+    legend_labels = []
+    
+    for idx, state in enumerate(states_to_plot):
+        ax = axes[idx]
+        
+        # 为每个数据源绘制线条
+        for df_idx, (df, label) in enumerate(zip(dataframes, labels)):
+            # 提取该状态的数据
+            state_data = df[df['State'] == state]
+            
+            if len(state_data) == 0:
+                continue
+                
+            means = []
+            stds = []
+            
+            # 提取每个步数的均值和标准差
+            for step in steps:
+                mean_col = f'{step}_steps_mean'
+                std_col = f'{step}_steps_std'
+                
+                if mean_col in state_data.columns and std_col in state_data.columns:
+                    means.append(state_data[mean_col].iloc[0])
+                    stds.append(state_data[std_col].iloc[0])
+                else:
+                    means.append(np.nan)
+                    stds.append(np.nan)
+            
+            means = np.array(means)
+            stds = np.array(stds)
+            
+            # 绘制均值线和误差带
+            line = ax.plot(steps, means, 'o-', label=label, color=colors[df_idx], 
+                          linewidth=2, markersize=6)
+            # ax.fill_between(steps, means - stds, means + stds, 
+            #                alpha=0.2, color=colors[df_idx])
+            
+            # 只在第一个子图时收集legend信息
+            if idx == 0:
+                legend_handles.append(line[0])
+                legend_labels.append(label)
+        
+        # 设置子图属性
+        ax.set_xlabel('Steps', fontsize=10)
+        ax.set_ylabel('Error', fontsize=10)
+        ax.set_title(f'{state}', fontsize=12, fontweight='bold')
+        ax.grid(True, alpha=0.3)
+        # 移除每个子图的legend
+        # ax.legend(fontsize=10)
+        
+        # 设置x轴刻度
+        ax.set_xticks(steps)
+        ax.set_xticklabels(steps, fontsize=8)
+        
+        # 调整y轴标签字体大小
+        ax.tick_params(axis='y', labelsize=8)
+    
+    # 添加全局legend
+    fig.legend(legend_handles, legend_labels, 
+               loc='upper center', 
+               bbox_to_anchor=(0.5, 0.95),
+               ncol=3, 
+               fontsize=12,
+               frameon=True,
+               fancybox=True,
+               shadow=True)
+    
+    # 调整布局 - 为legend和title留出空间
+    plt.tight_layout()
+    plt.subplots_adjust(top=0.82)  # 为legend留出空间
+    
+    # 添加主标题
+    plt.suptitle(f'Comparison of Different Methods (Threshold Velocity = {threshold_vel})', 
+                 fontsize=16, fontweight='bold', y=0.98)
+    
+    # 保存图片
+    store_csv_path = args.visualization_save_path.replace('.npz', '_comparison.png')
+    plt.savefig(store_csv_path, dpi=300, bbox_inches='tight')
+    plt.show()
 
-# # (2) 预测轨迹：对每隔 20 帧的时刻，向前预测 15 步
-# idx  = np.arange(0, N, 20)      # 预测起点索引
-# M, T = len(idx), 15
-# store_predict_array = np.zeros((M, T, 3))
-# for m, id0 in enumerate(idx):
-#     base       = state_array[id0]
-#     direction  = np.random.randn(3)
-#     direction /= np.linalg.norm(direction)          # 归一化方向
-#     steps      = np.linspace(0.4, 6.5, T).reshape(-1, 1)
-#     store_predict_array[m] = base + direction * steps \
-#                              + np.random.normal(scale=0.2, size=(T, 3))
-
-# # (3) 控制轨迹：在预测值基础上再加少量噪声
-# hold_u_x_array = store_predict_array \
-#                  + np.random.normal(scale=0.3, size=store_predict_array.shape)
-
-# # (4) 目标点：随便放一个
-# aim_goal_array = np.array([[10, 10, 10]])
-
-# # ─────────────────────────────────────────
-# # 2. 画图，检验函数是否工作正常
-# # ─────────────────────────────────────────
-# plot_state_3d(state_array,
-#               store_predict_array,
-#               hold_u_x_array,
-#               [[0,0,0], [5,5,5], [10,10,10]],  # 假设的门位置
-#               save_path=None,        # 想保存就写 "demo_3d.pdf" / "demo_3d.png"
-#               show=True)
+if __name__ == "__main__":
+    # 使用函数
+    create_comparison_plot(threshold_vel=args.threshold_vel)

@@ -58,9 +58,10 @@ class HumanMPC:
     def step(self, state, aim):
         aim[4]=0
         aim[5]=0
-        aim[11]=0
-        aim[12]=0
-        aim[13]=0
+        aim[6]=0
+        # aim[11]=0
+        # aim[12]=0
+        # aim[13]=0
 
         n_batch = 1
         x_all = torch.from_numpy(state).float().to(self.device)
@@ -152,6 +153,7 @@ class HumanMPC:
 def cal_error(true_states, predict_states, predict_steps):
     true_steps = true_states.shape[0]
     errors_list = []
+    stds_list = []
 
     for dim in range(true_states.shape[1]):
         errors = []
@@ -161,7 +163,8 @@ def cal_error(true_states, predict_states, predict_steps):
             error = np.abs(true_values - predict_values)
             errors.append(np.mean(error))
         errors_list.append(np.mean(errors))
-    return errors_list
+        stds_list.append(np.std(errors))
+    return errors_list, stds_list
 
 import collections
 
@@ -264,30 +267,72 @@ def draw_results():
             hold_u_x_array,
             gate_positions)
     
-    print("5 steps:")
-    print(cal_error(state_array,store_predict_array,5))
-    print(cal_error(state_array,hold_u_x_array,5))
-
-    print("10 steps:")
-    print(cal_error(state_array,store_predict_array,10))
-    print(cal_error(state_array,hold_u_x_array,10))
-
-    print("20 steps:")
-    print(cal_error(state_array,store_predict_array,20))
-    print(cal_error(state_array,hold_u_x_array,20))
+    # Create lists to store error data for both models
+    steps_list = [5, 10, 20, 30, 40, 50]
+    state_names = ['x', 'y', 'z', 'qw', 'qx', 'qy', 'qz', 'vx', 'vy', 'vz']
     
-    print("30 steps:")
-    print(cal_error(state_array,store_predict_array,30))
-    print(cal_error(state_array,hold_u_x_array,30))
+    # Dictionary to store metrics for store_predict_array
+    store_metrics = {
+        'State': state_names
+    }
     
-    print("40 steps:")
-    print(cal_error(state_array,store_predict_array,40))
-    print(cal_error(state_array,hold_u_x_array,40))
-
-    print("50 steps:")
-    print(cal_error(state_array,store_predict_array,50))
-    print(cal_error(state_array,hold_u_x_array,50))
-
+    # Dictionary to store metrics for hold_u_x_array
+    hold_metrics = {
+        'State': state_names
+    }
+    
+    # Calculate errors for each prediction horizon
+    for steps in steps_list:
+        print(f"{steps} steps:")
+        store_error, store_std = cal_error(state_array, store_predict_array, steps)
+        hold_error, hold_std = cal_error(state_array, hold_u_x_array, steps)
+        print(store_error, store_std)
+        print(hold_error, hold_std)
+        
+        # Add to dictionaries
+        store_metrics[f'{steps}_steps_mean'] = store_error
+        store_metrics[f'{steps}_steps_std'] = store_std
+        hold_metrics[f'{steps}_steps_mean'] = hold_error
+        hold_metrics[f'{steps}_steps_std'] = hold_std
+    
+    # Save store_predict_array metrics to CSV
+    import csv
+    store_csv_path = args.visualization_save_path.replace('.npz', '_store_predict_metrics.csv')
+    with open(store_csv_path, 'w', newline='') as csvfile:
+        # Create header row
+        fieldnames = ['State']
+        for steps in steps_list:
+            fieldnames.extend([f'{steps}_steps_mean', f'{steps}_steps_std'])
+        
+        writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
+        writer.writeheader()
+        
+        # Write each row
+        for i, state_name in enumerate(state_names):
+            row = {'State': state_name}
+            for steps in steps_list:
+                row[f'{steps}_steps_mean'] = store_metrics[f'{steps}_steps_mean'][i]
+                row[f'{steps}_steps_std'] = store_metrics[f'{steps}_steps_std'][i]
+            writer.writerow(row)
+    
+    # Save hold_u_x_array metrics to CSV
+    hold_csv_path = args.visualization_save_path.replace('.npz', '_hold_u_x_metrics.csv')
+    with open(hold_csv_path, 'w', newline='') as csvfile:
+        # Create header row
+        fieldnames = ['State']
+        for steps in steps_list:
+            fieldnames.extend([f'{steps}_steps_mean', f'{steps}_steps_std'])
+        
+        writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
+        writer.writeheader()
+        
+        # Write each row
+        for i, state_name in enumerate(state_names):
+            row = {'State': state_name}
+            for steps in steps_list:
+                row[f'{steps}_steps_mean'] = hold_metrics[f'{steps}_steps_mean'][i]
+                row[f'{steps}_steps_std'] = hold_metrics[f'{steps}_steps_std'][i]
+            writer.writerow(row)
 
 if __name__ == "__main__":
     # main()

@@ -4,9 +4,7 @@ import torch.nn as nn
 import torch.optim as optim
 import torch.nn.functional as F
 from torch.utils.data import Dataset, DataLoader
-import collections
 import matplotlib.pyplot as plt
-from sklearn.metrics import mean_squared_error, mean_absolute_error
 import pandas as pd
 import sys
 import os
@@ -452,8 +450,9 @@ def main():
     print(summary_df.to_string(index=False))
     
     # 保存汇总表
-    summary_df.to_csv(f'Personalized_SA/nn_prediction/state_wise_prediction_errors_train{args.threshold_vel}.csv', index=False)
-    print(f"\nSummary table saved as 'state_wise_prediction_errors_train{args.threshold_vel}.csv'")
+    nn_csv_path = args.visualization_save_path.replace('.npz', '_nn_metrics.csv')
+    summary_df.to_csv(nn_csv_path, index=False)
+    print(f"\nSummary table saved as '{nn_csv_path}'")
 
     # 绘制可视化结果
     plot_error_heatmap(state_wise_results, f"Personalized_SA/nn_prediction/state_wise_error_heatmap_train{args.threshold_vel}.png")

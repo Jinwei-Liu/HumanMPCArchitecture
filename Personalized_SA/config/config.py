@@ -16,7 +16,7 @@ parser.add_argument("--alpha", type=float, default=0.1)
 parser.add_argument("--adaptive_alpha", action="store_true", default=True)
 parser.add_argument("--no_adaptive_alpha", dest="adaptive_alpha", action="store_false")
 parser.add_argument("--gamma", type=float, default=0.99)
-parser.add_argument("--threshold_vel", type=int, choices=[1, 3, 5], default=3)
+parser.add_argument("--threshold_vel", type=int, choices=[1, 3, 5], default=1)
 parser.add_argument("--save_path", type=str, default=None)
 parser.add_argument("--load_model", type=str, default=None)
 parser.add_argument("--visualization_save_path", type=str, default=None)
@@ -29,15 +29,16 @@ args.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
 def get_weights_and_paths(threshold_vel):
     weight_map = {
-        1: ([1.1508648, 1.1990767, 1.1594374, 0.70566994, 0.61176234, 0.2175607,
-            -0.6986771, -0.7920079, -0.7285001, -0.47435185],
-            [0.9479804, 0.02958369, 0.02927853, 0.03684817]),
-        3: ([ 1.1479964,   1.0211719,   0.848215,    0.64405197,  0.20096746, -0.00190247,
-            -0.48737872, -0.01006169,  0.01761045, -0.01894934],
-            [0.8606804,  0.00966638, 0.01236562, 0.01788813]),
-        5: ([ 1.5217704,   1.0734304,   1.2253189,   0.56899023,  0.22566086, -0.33834934,
-            0.34679148, -0.01452107,  0.02399969, -0.05830049],
-            [0.9528509,  0.02332965, 0.02409738, 0.03276937]),
+        1: ([0.9644163, 0.9895913, 1.3155642, -0.48001483, -0.0014637, 0.04012404,
+             -0.21776858, 0.24885532, -0.14794788, 0.24406084],
+            [0.84310704, 1.0195727,  1.0203135,  1.0087358]),
+        3: ([1.0433292, 1.039954, 1.1844419, -0.21072768, 0.17669167, 0.22673894,
+              0.12929986, 0.15958567, -0.00123615, 0.06187058],
+            [0.9413348, 1.0150563, 1.0574551, 0.9798457]),
+        5: ([9.1905951e-01, 9.3122399e-01, 1.0902803e+00, 2.7676991e-01,
+             -6.6724122e-03, -8.7446002e-05, -2.7459403e-02, 1.8389798e-03,
+             9.9912984e-03, -7.8114577e-02],
+            [0.94444656, 1.0395273, 0.9815468, 0.97386855]),
     }
     
     # 根据threshold_vel返回对应的权重
