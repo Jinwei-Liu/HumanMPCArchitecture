@@ -19,6 +19,7 @@ class QuadrotorRaceEnv:
     def __init__(self, dt: float = 0.01, mode: str = 'none', threshold_vel: int = args.threshold_vel):
         """
         mode: 'human' for visualized environment (pybullet GUI),
+              'control' for first-person view from drone,
               any other value skips rendering setup.
         """
         self.quad = Quadrotor_v0(dt)
@@ -57,10 +58,10 @@ class QuadrotorRaceEnv:
         # Visualization handles
         self.gate_ids = []
 
-        # Initialize PyBullet for rendering if in human mode
-        if self.mode == 'human':
+        # Initialize PyBullet for rendering if in human or control mode
+        if self.mode in ['human', 'control']:
             if p is None:
-                raise ImportError("pybullet is required for human mode but not installed.")
+                raise ImportError("pybullet is required for human/control mode but not installed.")
             p.connect(p.GUI, options="--opengl2")
             p.setAdditionalSearchPath(
                 os.path.join(os.path.dirname(__file__), 'util'),
@@ -103,13 +104,13 @@ class QuadrotorRaceEnv:
         self.history_reward_gate = None
 
         # Clear existing debug lines
-        if self.mode == 'human' and self.gate_ids:
+        if self.mode in ['human', 'control'] and self.gate_ids:
             for gid in self.gate_ids:
                 p.removeBody(gid)
             self.gate_ids = []
 
         # Draw gates once per reset
-        if self.mode == 'human':
+        if self.mode in ['human', 'control']:
             for gate_pos in self.gate_positions:
                 gid = p.loadURDF("gate.urdf",
                     basePosition=gate_pos.tolist(),
@@ -197,30 +198,61 @@ class QuadrotorRaceEnv:
         return float(reward)
 
     def render(self, mode: str = 'human'):
-        if self.mode != 'human':
+        if self.mode not in ['human', 'control']:
             return
+            
         pos_model = self.quad.get_position()
         quat_model = self.quad.get_quaternion()
         pb_quat = [quat_model[1], quat_model[2], quat_model[3], quat_model[0]]
+        
         p.resetBasePositionAndOrientation(
             self.quadrotor_id,
             pos_model.tolist(),
             pb_quat
         )
-        # Only update camera; gates already drawn
-        p.resetDebugVisualizerCamera(
-            cameraDistance=2,
-            cameraYaw=50,
-            cameraPitch=-35,
-            cameraTargetPosition=pos_model.tolist()
-        )
+        
+        if self.mode == 'human':
+            # Third-person view (original)
+            p.resetDebugVisualizerCamera(
+                cameraDistance=2,
+                cameraYaw=50,
+                cameraPitch=-35,
+                cameraTargetPosition=pos_model.tolist()
+            )
+        elif self.mode == 'control':          
+            # 1) 旋转矩阵（世界系）
+            R = np.array(p.getMatrixFromQuaternion(pb_quat)).reshape(3, 3)
+
+            # 2) 机体前/上方向
+            forward = R @ np.array([1, 0, 0])   # 机头(+X)
+            up      = R @ np.array([0, 0, 1])   # 机顶(+Z)
+
+            # 3) 目标点 = 无人机自身（或稍前一点）
+            target_pos = pos_model
+
+            # 4) 相机位置 = 机体后方 3 m + 向上 1 m
+            camera_pos = pos_model - forward * 3.0 + up * 1.0
+
+            # 5) 把 “target→camera” 向量转换成 Bullet 需要的 distance / yaw / pitch
+            vec      = camera_pos - target_pos
+            yaw      = np.degrees(np.arctan2(vec[1], vec[0]))
+            pitch    = np.degrees(np.arctan2(vec[2], np.hypot(vec[0], vec[1])))
+
+            # 6) 更新可视化相机
+            p.resetDebugVisualizerCamera(
+                cameraDistance       = 0.3,
+                cameraYaw            = yaw,
+                cameraPitch          = -pitch,
+                cameraTargetPosition = target_pos.tolist()
+            )
+
         time.sleep(0.01)
 
     def close(self):
         """
         Clean up and close the environment.
         """
-        if self.mode == 'human' and p is not None:
+        if self.mode in ['human', 'control'] and p is not None:
             p.disconnect()
 
     def sample_action(self) -> np.ndarray:
@@ -284,12 +316,13 @@ def visualize_gates(gate_positions: np.ndarray, gate_radius: float = 0.5):
     plt.show()
 
 if __name__ == "__main__":
+    # 测试human模式
     env = QuadrotorRaceEnv(dt=0.01, mode='human')
     obs, _ = env.reset(seed=42)
     print("Test Reset output:", obs)
 
-    # Visualize gates only
-    visualize_gates(env.gate_positions)
+    # # Visualize gates only
+    # visualize_gates(env.gate_positions)
 
     done = False
     total_reward = 0.0

@@ -47,7 +47,7 @@ class RemoteController:
         
         # Mapping of controller values to quadrotor actions
         self.thrust_scale = 20.0  # Max thrust value
-        self.rotation_scale = 20.0  # Max rotation value
+        self.rotation_scale = 3.0  # Max rotation value
         
         # Running flag for the controller thread
         self.running = False
@@ -85,11 +85,11 @@ class RemoteController:
                 # Left stick vertical (throttle)
                 self.throttle = self.controller.get_axis(2) * 0.5 + 0.5  # Normalize to 0-1
                 # Left stick horizontal (yaw)
-                self.yaw = self.controller.get_axis(0)
+                self.yaw = -self.controller.get_axis(3)
                 # Right stick vertical (pitch)
-                self.pitch = self.controller.get_axis(1)
+                self.pitch = -self.controller.get_axis(0)
                 # Right stick horizontal (roll)
-                self.roll = self.controller.get_axis(3)
+                self.roll = self.controller.get_axis(1)
             
             # Small sleep to prevent CPU hogging
             time.sleep(0.01)
@@ -120,7 +120,6 @@ class RemoteController:
             "pitch": self.pitch,
             "roll": self.roll
         }
-
 
 def test_controller():
     """
@@ -170,7 +169,7 @@ def control_quadrotor():
     Initializes the quadrotor environment and controller, then runs the control loop.
     """
     # Initialize the environment with visualization
-    env = QuadrotorRaceEnv(dt=0.01, mode='human')
+    env = QuadrotorRaceEnv(dt=0.01, mode='control')
     obs, _ = env.reset(seed=42)
     
     # Initialize the controller
@@ -213,7 +212,7 @@ def control_quadrotor():
                     print(f"Info: {info}")
             
             # Small delay to maintain simulation speed
-            time.sleep(0.001)
+            time.sleep(0.03)
     
     except KeyboardInterrupt:
         print("\nControl ended by user.")
@@ -359,7 +358,6 @@ def keyboard_control():
         env.close()
         pygame.quit()
         print(f"Final stats - Total reward: {total_reward:.2f}, Steps: {step_count}")
-
 
 if __name__ == "__main__":
     import argparse
