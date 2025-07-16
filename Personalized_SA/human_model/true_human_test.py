@@ -202,7 +202,7 @@ def identify_human():
 
     # Load pre-recorded actions and states from a human model
     timestamps = get_available_state_files()
-    states, actions = read_states(timestamps[0])
+    states, actions = read_states(timestamps[4])
     actions = np.array(actions)
     states = np.array(states)
 
@@ -412,13 +412,13 @@ def identify_human():
 
 from shared_autonomy_history import *
 def MPC_prediction():
-    selected_timestamp = 0
+    selected_timestamp = 4
     timestamps = get_available_state_files()
     states, actions = read_states(timestamps[selected_timestamp])
 
-    humanmodel = HumanMPC(goal_weights= [ 0.9517356,   0.900815,    1.4388239,   0.64279324,  0.5741863,  -0.51816905,
-                                        0.63989043,  0.2535692,  -0.06484116,  0.950778],
-                          ctrl_weights= [0.88422626, 0.67685866, 0.6697947,  0.68702245], T_HORIZON=50)
+    humanmodel = HumanMPC(goal_weights= [1.2780885,   0.93348813,  1.4141667,   0.7072298,   0.77331805, -0.6817768,
+                                        0.6672903,  -0.4150411,   0.11940738,  0.9104297],
+                          ctrl_weights= [0.90351325, 0.7783563,  0.7277992,  0.696444], T_HORIZON=100)
 
     step_idx = 0
     state = states[0]
@@ -485,7 +485,7 @@ def MPC_prediction():
             gate_positions)
     
     # Create lists to store error data for both models
-    steps_list = [5, 10, 20, 30, 40, 50]
+    steps_list = [5, 10, 20, 30, 40, 50, 60, 70, 80, 90, 100]
     state_names = ['x', 'y', 'z', 'qw', 'qx', 'qy', 'qz', 'vx', 'vy', 'vz']
     
     # Dictionary to store metrics for store_predict_array
@@ -576,7 +576,7 @@ def visualization():
     sns.set_palette("Set1")
     
     # 定义步数和状态
-    steps = [5, 10, 20, 30, 40, 50]
+    steps = [5, 10, 20, 30, 40, 50, 60, 70, 80, 90, 100]
     states_to_plot = ['x', 'y', 'z', 'qw', 'qx', 'qy','qz','vx','vy','vz']  # 选择10个状态进行绘图
     
     # 创建子图 - 为legend留出空间

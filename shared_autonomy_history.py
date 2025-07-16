@@ -56,12 +56,21 @@ class HumanMPC:
         self.u_max = torch.tensor([100.0, 20.0, 20.0, 20.0], device=self.device)
 
     def step(self, state, aim):
+        # true_human
+        aim[4]=0
+        aim[5]=0
+        aim[6]=0
+        aim[10]=10
+        aim[11]=0
+        aim[12]=0
+        aim[13]=0
+        # RLHuman
         aim[4]=0
         aim[5]=0
         aim[6]=0
         aim[11]=0
         aim[12]=0
-        aim[13]=0
+        aim[13]=0     
 
         n_batch = 1
         x_all = torch.from_numpy(state).float().to(self.device)
