@@ -202,7 +202,7 @@ def identify_human():
 
     # Load pre-recorded actions and states from a human model
     timestamps = get_available_state_files()
-    states, actions = read_states(timestamps[4])
+    states, actions = read_states(timestamps[0])
     actions = np.array(actions)
     states = np.array(states)
 
@@ -412,7 +412,7 @@ def identify_human():
 
 from shared_autonomy_history import *
 def MPC_prediction():
-    selected_timestamp = 4
+    selected_timestamp = 0
     timestamps = get_available_state_files()
     states, actions = read_states(timestamps[selected_timestamp])
     
@@ -433,9 +433,9 @@ def MPC_prediction():
     fig.tight_layout()
     plt.show()
 
-    humanmodel = HumanMPC(goal_weights= [1.2780885,   0.93348813,  1.4141667,   0.7072298,   0.77331805, -0.6817768,
-                                        0.6672903,  -0.4150411,   0.11940738,  0.9104297],
-                          ctrl_weights= [0.90351325, 0.7783563,  0.7277992,  0.696444], T_HORIZON=100)
+    humanmodel = HumanMPC(goal_weights= [1.2481005, 0.7972751, 1.2428015, 0.729391, 0.79417163, -0.8107181,
+                                          0.72714406, -0.11059693, -0.04049961, 0.754348],
+                          ctrl_weights= [0.8943962, 0.81349194, 0.8932893, 0.77754784], T_HORIZON=100)
 
     step_idx = 0
     state = states[0]
@@ -687,5 +687,5 @@ def visualization():
 if __name__ == "__main__":
     # nn_prediction()
     # identify_human()
-    # MPC_prediction()
-    visualization()
+    MPC_prediction()
+    # visualization()
