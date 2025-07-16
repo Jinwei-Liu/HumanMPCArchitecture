@@ -51,7 +51,7 @@ class RemoteController:
         
         # Mapping of controller values to quadrotor actions
         self.thrust_scale = 20.0  # Max thrust value
-        self.rotation_scale = 3.0  # Max rotation value
+        self.rotation_scale = 5.0  # Max rotation value
         
         # Running flag for the controller thread
         self.running = False
@@ -219,7 +219,7 @@ def control_quadrotor():
                     print(f"Info: {info}")
             
             # Small delay to maintain simulation speed
-            time.sleep(0.05)
+            time.sleep(0.1)
     
     except KeyboardInterrupt:
         print("\nControl ended by user.")

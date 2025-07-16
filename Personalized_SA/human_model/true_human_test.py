@@ -415,6 +415,23 @@ def MPC_prediction():
     selected_timestamp = 4
     timestamps = get_available_state_files()
     states, actions = read_states(timestamps[selected_timestamp])
+    
+    n_state = 10
+    fig, axes = plt.subplots(n_state,      # 行数 = 状态维度
+                        1,            # 一列
+                        sharex=True,  # 共用 x 轴
+                        figsize=(6, 1.8*n_state)) 
+
+    for dim in range(n_state):
+        ax = axes[dim]                    # 当前子图
+        ax.plot(states[:, dim])            # 画出 dim 维
+        ax.set_ylabel(f"x[{dim}]")
+        ax.grid(True, linestyle="--", alpha=0.4)
+
+    axes[-1].set_xlabel("Timestep")       # 只在最后一行标注
+    fig.suptitle("Evolution of state vector x", y=1.02)
+    fig.tight_layout()
+    plt.show()
 
     humanmodel = HumanMPC(goal_weights= [1.2780885,   0.93348813,  1.4141667,   0.7072298,   0.77331805, -0.6817768,
                                         0.6672903,  -0.4150411,   0.11940738,  0.9104297],
@@ -429,7 +446,7 @@ def MPC_prediction():
 
     statess = collections.deque([state[:10]] * 100, maxlen=3)  # Adjust length as needed
     actionss = collections.deque([np.zeros(4)] * 100, maxlen=3)  # Same length as actions array
-    for step_idx in range(len(states)-1):
+    for step_idx in range(200):
         print(f"Step {step_idx}")
         # Sample an action in [-1, 1] and scale to environment bounds
         env_act = actions[step_idx]
@@ -444,7 +461,7 @@ def MPC_prediction():
         show_env.set_state(state[:10])
         hold_u_x = []
         hold_u_x.append(state[:10])
-        for _ in range(50):
+        for _ in range(100):
             hold_u_x.append(show_env.run(env_act))
         hold_u_x = np.array(hold_u_x)
         hold_u_x_array.append(hold_u_x)
@@ -576,7 +593,7 @@ def visualization():
     sns.set_palette("Set1")
     
     # 定义步数和状态
-    steps = [5, 10, 20, 30, 40, 50, 60, 70, 80, 90, 100]
+    steps = [5, 10, 20, 30, 40, 50, 60, 70, 80, 90, 100]  # 步数列表
     states_to_plot = ['x', 'y', 'z', 'qw', 'qx', 'qy','qz','vx','vy','vz']  # 选择10个状态进行绘图
     
     # 创建子图 - 为legend留出空间
@@ -670,5 +687,5 @@ def visualization():
 if __name__ == "__main__":
     # nn_prediction()
     # identify_human()
-    MPC_prediction()
-    # visualization()
+    # MPC_prediction()
+    visualization()
