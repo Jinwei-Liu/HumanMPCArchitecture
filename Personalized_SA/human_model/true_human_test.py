@@ -105,7 +105,7 @@ def nn_prediction():
     # for selected_timestamp in timestamps:
     #     read_and_display_states(selected_timestamp)
 
-    num_train_episodes = 2
+    num_train_episodes = 3
     num_episodes = len(timestamps)
     all_episodes_data = []
     
@@ -124,7 +124,7 @@ def nn_prediction():
     # 准备训练数据：合并多个训练episode的数据
     train_episodes_data = [all_episodes_data[i] for i in train_episodes_idx]
     train_sequences, train_targets = combine_multiple_episodes_data(
-        train_episodes_data, sequence_length=3, predict_steps=50
+        train_episodes_data, sequence_length=3, predict_steps=100
     )
     
     print(f"Training data: {len(train_sequences)} sequences from {num_train_episodes} episodes")
@@ -136,7 +136,7 @@ def nn_prediction():
     # 初始化模型
     input_dim = train_sequences.shape[2]  # 状态维度 + 动作维度
     model = HumanBehaviorPredictor(input_dim=input_dim, hidden_dim=128, 
-                                  num_layers=2, predict_steps=50).to(device)
+                                  num_layers=2, predict_steps=100).to(device)
     
     print(f"Model input dimension: {input_dim}")
     print(f"Model parameters: {sum(p.numel() for p in model.parameters())}")
@@ -150,7 +150,7 @@ def nn_prediction():
     for test_idx in test_episodes_idx:
         test_states, test_actions = all_episodes_data[test_idx]
         test_sequences, test_targets = create_sequences(test_states, test_actions, 
-                                                       sequence_length=3, predict_steps=50)
+                                                       sequence_length=3, predict_steps=100)
         
         for i in range(len(test_sequences)):
             test_data.append((test_sequences[i], test_targets[i]))
@@ -163,7 +163,7 @@ def nn_prediction():
     
     # 计算每个状态维度的误差
     state_wise_results = calculate_state_wise_errors(predictions, targets, 
-                                                    predict_steps_list=[5, 10, 20, 30, 40, 50])
+                                                    predict_steps_list=[5, 10, 20, 30, 40, 50, 60, 70, 80, 90, 100])
     
     # 打印详细结果
     print_detailed_results(state_wise_results)
@@ -433,9 +433,9 @@ def MPC_prediction():
     fig.tight_layout()
     plt.show()
 
-    humanmodel = HumanMPC(goal_weights= [1.2481005, 0.7972751, 1.2428015, 0.729391, 0.79417163, -0.8107181,
-                                          0.72714406, -0.11059693, -0.04049961, 0.754348],
-                          ctrl_weights= [0.8943962, 0.81349194, 0.8932893, 0.77754784], T_HORIZON=100)
+    humanmodel = HumanMPC(goal_weights= [0.86067986, 0.91357833, 1.3121516, 0.63025314, 0.5201712, 0.60911137,
+                                          0.7222595, 0.03662273, 0.04287567, -0.19597986],
+                          ctrl_weights= [0.93935597, 0.9478975,  0.94227266, 0.95469636], T_HORIZON=100)
 
     step_idx = 0
     state = states[0]
@@ -687,5 +687,5 @@ def visualization():
 if __name__ == "__main__":
     # nn_prediction()
     # identify_human()
-    MPC_prediction()
-    # visualization()
+    # MPC_prediction()
+    visualization()
