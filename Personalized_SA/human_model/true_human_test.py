@@ -97,6 +97,29 @@ def read_states(timestamp=None):
 
     return states_arr[:,:10], actions_arr
 
+
+def create_error_summary_table_h(results):
+    """创建误差汇总表"""
+    state_names = ['x', 'y', 'z', 'qw', 'qx', 'qy', 'qz', 'vx', 'vy', 'vz']
+    predict_steps_list = sorted(results.keys())
+    
+    # 创建DataFrame用于更好的可视化
+    summary_data = []
+    
+    for state_name in state_names:
+        row = {'State': state_name}
+        for steps in predict_steps_list:
+            mean_error = results[steps][state_name]['mean_error']
+            std_error = results[steps][state_name]['std_error']
+            max_error = results[steps][state_name]['max_error']
+            row[f'{steps}_steps_mean'] = mean_error
+            row[f'{steps}_steps_std'] = std_error
+            row[f'{steps}_steps_max'] = max_error
+        summary_data.append(row)
+    
+    df = pd.DataFrame(summary_data)
+    return df
+
 def nn_prediction():
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
     # Alternatively, prompt user to select from list
@@ -168,7 +191,7 @@ def nn_prediction():
     # 打印详细结果
     print_detailed_results(state_wise_results)
     # 创建汇总表
-    summary_df = create_error_summary_table(state_wise_results)
+    summary_df = create_error_summary_table_h(state_wise_results)
     print("\n" + "="*80)
     print("SUMMARY TABLE")
     print("="*80)
@@ -192,7 +215,6 @@ def nn_prediction():
     plt.grid(True)
     plt.savefig(f"Personalized_SA/nn_prediction/training_loss_train_true_human.png", dpi=300, bbox_inches='tight')
     plt.show()
-
 
 def identify_human():
     import numpy as np
@@ -410,6 +432,24 @@ def identify_human():
 
     plt.show()
 
+def cal_error_h(true_states, predict_states, predict_steps):
+    true_steps = true_states.shape[0]
+    errors_list = []
+    stds_list = []
+    max_errors_list = []
+
+    for dim in range(true_states.shape[1]):
+        errors = []
+        for step in range(true_steps - predict_steps):  
+            true_values = true_states[step:step + predict_steps, dim]
+            predict_values = predict_states[step, :predict_steps, dim]
+            error = np.abs(true_values - predict_values)
+            errors.append(np.mean(error))
+        errors_list.append(np.mean(errors))
+        stds_list.append(np.std(errors))
+        max_errors_list.append(np.max(errors))
+    return errors_list, stds_list, max_errors_list
+
 from shared_autonomy_history import *
 def MPC_prediction():
     selected_timestamp = 1
@@ -518,17 +558,17 @@ def MPC_prediction():
     # Calculate errors for each prediction horizon
     for steps in steps_list:
         print(f"{steps} steps:")
-        store_error, store_std = cal_error(state_array, store_predict_array, steps)
-        hold_error, hold_std = cal_error(state_array, hold_u_x_array, steps)
-        print(store_error, store_std)
-        print(hold_error, hold_std)
+        store_error, store_std, store_max = cal_error_h(state_array, store_predict_array, steps)  # 添加最大误差
+        hold_error, hold_std, hold_max = cal_error_h(state_array, hold_u_x_array, steps)  # 添加最大误差
         
         # Add to dictionaries
         store_metrics[f'{steps}_steps_mean'] = store_error
         store_metrics[f'{steps}_steps_std'] = store_std
+        store_metrics[f'{steps}_steps_max'] = store_max  # 添加最大误差
         hold_metrics[f'{steps}_steps_mean'] = hold_error
         hold_metrics[f'{steps}_steps_std'] = hold_std
-    
+        hold_metrics[f'{steps}_steps_max'] = hold_max  # 添加最大误差
+
     # Save store_predict_array metrics to CSV
     import csv
     store_csv_path = './Personalized_SA/visualization/true_human_store_predict_metrics.csv'
@@ -536,7 +576,7 @@ def MPC_prediction():
         # Create header row
         fieldnames = ['State']
         for steps in steps_list:
-            fieldnames.extend([f'{steps}_steps_mean', f'{steps}_steps_std'])
+            fieldnames.extend([f'{steps}_steps_mean', f'{steps}_steps_std', f'{steps}_steps_max'])
         
         writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
         writer.writeheader()
@@ -547,6 +587,7 @@ def MPC_prediction():
             for steps in steps_list:
                 row[f'{steps}_steps_mean'] = store_metrics[f'{steps}_steps_mean'][i]
                 row[f'{steps}_steps_std'] = store_metrics[f'{steps}_steps_std'][i]
+                row[f'{steps}_steps_max'] = store_metrics[f'{steps}_steps_max'][i]  # 添加最大误差
             writer.writerow(row)
     
     # Save hold_u_x_array metrics to CSV
@@ -555,7 +596,7 @@ def MPC_prediction():
         # Create header row
         fieldnames = ['State']
         for steps in steps_list:
-            fieldnames.extend([f'{steps}_steps_mean', f'{steps}_steps_std'])
+            fieldnames.extend([f'{steps}_steps_mean', f'{steps}_steps_std', f'{steps}_steps_max'])
         
         writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
         writer.writeheader()
@@ -684,8 +725,342 @@ def visualization():
     plt.savefig(store_csv_path, dpi=300, bbox_inches='tight')
     plt.show()
 
+
+
+
+
+# ----------------------------------------------------------------------------------------------------------------------------------------
+def calculate_position_velocity_errors(predictions, targets, predict_steps_list):
+    """
+    计算位置和速度的向量误差（二范数）
+    
+    Args:
+        predictions: 预测值 (num_sequences, predict_steps, state_dim)
+        targets: 目标值 (num_sequences, predict_steps, state_dim)
+        predict_steps_list: 要评估的预测步数列表
+    
+    Returns:
+        results: 包含位置和速度误差的字典
+    """
+    results = {}
+    
+    for steps in predict_steps_list:
+        # 提取位置维度 (x, y, z)
+        pred_positions = predictions[:, :steps, 0:3]  # x, y, z
+        true_positions = targets[:, :steps, 0:3]
+        
+        # 提取速度维度 (vx, vy, vz)
+        pred_velocities = predictions[:, :steps, 7:10]  # vx, vy, vz
+        true_velocities = targets[:, :steps, 7:10]
+        
+        # 计算位置误差（欧几里得距离）
+        position_errors = np.linalg.norm(pred_positions - true_positions, axis=2)  # (num_sequences, steps)
+        position_mean_error = np.mean(position_errors)
+        position_std_error = np.std(position_errors)
+        position_max_error = np.max(position_errors)
+        
+        # 计算速度误差（欧几里得距离）
+        velocity_errors = np.linalg.norm(pred_velocities - true_velocities, axis=2)  # (num_sequences, steps)
+        velocity_mean_error = np.mean(velocity_errors)
+        velocity_std_error = np.std(velocity_errors)
+        velocity_max_error = np.max(velocity_errors)
+        
+        results[steps] = {
+            'position': {
+                'mean_error': position_mean_error,
+                'std_error': position_std_error,
+                'max_error': position_max_error
+            },
+            'velocity': {
+                'mean_error': velocity_mean_error,
+                'std_error': velocity_std_error,
+                'max_error': velocity_max_error
+            }
+        }
+    
+    return results
+
+def save_position_velocity_errors_to_csv(results, filename):
+    """
+    将位置和速度误差保存到CSV文件
+    
+    Args:
+        results: 包含误差数据的字典
+        filename: 输出CSV文件名
+    """
+    import pandas as pd
+    
+    # 准备数据
+    data = []
+    predict_steps_list = sorted(results.keys())
+    
+    # 添加位置误差行
+    position_row = {'Metric': 'Position'}
+    for steps in predict_steps_list:
+        position_row[f'{steps}_steps_mean'] = results[steps]['position']['mean_error']
+        position_row[f'{steps}_steps_std'] = results[steps]['position']['std_error']
+        position_row[f'{steps}_steps_max'] = results[steps]['position']['max_error']
+    data.append(position_row)
+    
+    # 添加速度误差行
+    velocity_row = {'Metric': 'Velocity'}
+    for steps in predict_steps_list:
+        velocity_row[f'{steps}_steps_mean'] = results[steps]['velocity']['mean_error']
+        velocity_row[f'{steps}_steps_std'] = results[steps]['velocity']['std_error']
+        velocity_row[f'{steps}_steps_max'] = results[steps]['velocity']['max_error']
+    data.append(velocity_row)
+    
+    # 创建DataFrame并保存
+    df = pd.DataFrame(data)
+    df.to_csv(filename, index=False)
+    print(f"\nPosition and velocity errors saved to '{filename}'")
+
+def nn_prediction_with_vector_errors():
+    """
+    运行nn_prediction并额外计算位置和速度的向量误差
+    """
+    device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+    timestamps = get_available_state_files()
+    
+    num_train_episodes = 3
+    num_episodes = len(timestamps)
+    all_episodes_data = []
+    
+    for selected_timestamp in timestamps:
+        states, actions = read_states(selected_timestamp)
+        print(f"Loaded states and actions from {selected_timestamp} with shapes: {states.shape}, {actions.shape}")
+        all_episodes_data.append((states, actions))
+    
+    # 数据划分
+    train_episodes_idx = list(range(num_train_episodes))
+    test_episodes_idx = list(range(num_train_episodes, num_episodes))
+    
+    print(f"\nUsing episodes {[i+1 for i in train_episodes_idx]} for training")
+    print(f"Using episodes {[i+1 for i in test_episodes_idx]} for testing")
+    
+    # 准备训练数据
+    train_episodes_data = [all_episodes_data[i] for i in train_episodes_idx]
+    train_sequences, train_targets = combine_multiple_episodes_data(
+        train_episodes_data, sequence_length=3, predict_steps=100
+    )
+    
+    print(f"Training data: {len(train_sequences)} sequences from {num_train_episodes} episodes")
+    
+    # 创建数据加载器
+    train_dataset = PredictionDataset(train_sequences, train_targets)
+    train_loader = DataLoader(train_dataset, batch_size=32, shuffle=True)
+    
+    # 初始化模型
+    input_dim = train_sequences.shape[2]
+    model = HumanBehaviorPredictor(input_dim=input_dim, hidden_dim=128, 
+                                  num_layers=2, predict_steps=100).to(device)
+    
+    print(f"Model input dimension: {input_dim}")
+    print(f"Model parameters: {sum(p.numel() for p in model.parameters())}")
+    
+    # 训练模型
+    print("\nTraining model...")
+    train_losses = train_model(model, train_loader, device, epochs=100)
+    
+    # 准备测试数据
+    test_data = []
+    for test_idx in test_episodes_idx:
+        test_states, test_actions = all_episodes_data[test_idx]
+        test_sequences, test_targets = create_sequences(test_states, test_actions, 
+                                                       sequence_length=3, predict_steps=100)
+        
+        for i in range(len(test_sequences)):
+            test_data.append((test_sequences[i], test_targets[i]))
+    
+    print(f"Test data: {len(test_data)} sequences from {len(test_episodes_idx)} episodes")
+    
+    # 评估模型
+    print("\nEvaluating model...")
+    predictions, targets = evaluate_model(model, test_data, device)
+    predictions = np.array(predictions)
+    targets = np.array(targets)
+    
+    # 计算位置和速度的向量误差
+    predict_steps_list = [5, 10, 20, 30, 40, 50, 60, 70, 80, 90, 100]
+    position_velocity_results = calculate_position_velocity_errors(predictions, targets, predict_steps_list)
+    
+    # 打印结果
+    print("\n" + "="*80)
+    print("POSITION AND VELOCITY ERROR SUMMARY")
+    print("="*80)
+    for steps in predict_steps_list:
+        print(f"\n{steps} steps:")
+        print(f"  Position - Mean Error: {position_velocity_results[steps]['position']['mean_error']:.6f}, "
+              f"Std: {position_velocity_results[steps]['position']['std_error']:.6f}, "
+              f"Max: {position_velocity_results[steps]['position']['max_error']:.6f}")
+        print(f"  Velocity - Mean Error: {position_velocity_results[steps]['velocity']['mean_error']:.6f}, "
+              f"Std: {position_velocity_results[steps]['velocity']['std_error']:.6f}, "
+              f"Max: {position_velocity_results[steps]['velocity']['max_error']:.6f}")
+    
+    # 保存到CSV
+    position_velocity_csv_path = 'Personalized_SA/visualization/true_human_position_velocity_errors.csv'
+    save_position_velocity_errors_to_csv(position_velocity_results, position_velocity_csv_path)
+    
+    # # 调用原始的nn_prediction函数以保持兼容性
+    # nn_prediction()
+
+def calculate_mpc_position_velocity_errors():
+    """
+    读取MPC预测数据，计算位置和速度的向量误差并保存到CSV
+    """
+    # 加载数据
+    data = np.load('./Personalized_SA/visualization/threshold_vel_true_human.npz')
+    state_array = data['state_array']  # 真实状态
+    store_predict_array = data['store_predict_array']  # MPC预测状态
+    hold_u_x_array = data['hold_u_x_array']  # 保持控制输入的状态
+    
+    print(f"Loaded data shapes:")
+    print(f"  state_array: {state_array.shape}")
+    print(f"  store_predict_array: {store_predict_array.shape}")
+    print(f"  hold_u_x_array: {hold_u_x_array.shape}")
+    
+    # 定义要评估的预测步数
+    predict_steps_list = [5, 10, 20, 30, 40, 50, 60, 70, 80, 90, 100]
+    
+    # 计算store_predict_array的误差
+    store_results = calculate_vector_errors_for_mpc(state_array, store_predict_array, predict_steps_list)
+    
+    # 计算hold_u_x_array的误差
+    hold_results = calculate_vector_errors_for_mpc(state_array, hold_u_x_array, predict_steps_list)
+    
+    # 保存store_predict_array的结果
+    save_mpc_errors_to_csv(store_results, 
+                          './Personalized_SA/visualization/true_human_store_predict_position_velocity_errors.csv',
+                          'Store Predict')
+    
+    # 保存hold_u_x_array的结果
+    save_mpc_errors_to_csv(hold_results, 
+                          './Personalized_SA/visualization/true_human_hold_u_x_position_velocity_errors.csv',
+                          'Hold U X')
+    
+    # 打印结果摘要
+    print("\n" + "="*80)
+    print("MPC POSITION AND VELOCITY ERROR SUMMARY")
+    print("="*80)
+    
+    print("\nStore Predict Array Results:")
+    for steps in predict_steps_list:
+        print(f"\n{steps} steps:")
+        print(f"  Position - Mean Error: {store_results[steps]['position']['mean_error']:.6f}, "
+              f"Std: {store_results[steps]['position']['std_error']:.6f}, "
+              f"Max: {store_results[steps]['position']['max_error']:.6f}")
+        print(f"  Velocity - Mean Error: {store_results[steps]['velocity']['mean_error']:.6f}, "
+              f"Std: {store_results[steps]['velocity']['std_error']:.6f}, "
+              f"Max: {store_results[steps]['velocity']['max_error']:.6f}")
+    
+    print("\n" + "-"*80)
+    print("\nHold U X Array Results:")
+    for steps in predict_steps_list:
+        print(f"\n{steps} steps:")
+        print(f"  Position - Mean Error: {hold_results[steps]['position']['mean_error']:.6f}, "
+              f"Std: {hold_results[steps]['position']['std_error']:.6f}, "
+              f"Max: {hold_results[steps]['position']['max_error']:.6f}")
+        print(f"  Velocity - Mean Error: {hold_results[steps]['velocity']['mean_error']:.6f}, "
+              f"Std: {hold_results[steps]['velocity']['std_error']:.6f}, "
+              f"Max: {hold_results[steps]['velocity']['max_error']:.6f}")
+
+def calculate_vector_errors_for_mpc(true_states, predict_states, predict_steps_list):
+    """
+    计算MPC预测的位置和速度向量误差
+    
+    Args:
+        true_states: 真实状态 (num_steps, state_dim)
+        predict_states: 预测状态 (num_steps, predict_horizon, state_dim)
+        predict_steps_list: 要评估的预测步数列表
+    
+    Returns:
+        results: 包含位置和速度误差的字典
+    """
+    results = {}
+    num_steps = true_states.shape[0]
+    
+    for steps in predict_steps_list:
+        position_errors_all = []
+        velocity_errors_all = []
+        
+        # 对每个时间步计算误差
+        for t in range(num_steps - steps):
+            # 真实的未来轨迹
+            true_future_positions = true_states[t:t+steps, 0:3]  # x, y, z
+            true_future_velocities = true_states[t:t+steps, 7:10]  # vx, vy, vz
+            
+            # 预测的未来轨迹
+            pred_future_positions = predict_states[t, :steps, 0:3]
+            pred_future_velocities = predict_states[t, :steps, 7:10]
+            
+            # 计算每个预测步的位置误差（欧几里得距离）
+            for s in range(steps):
+                pos_error = np.linalg.norm(pred_future_positions[s] - true_future_positions[s])
+                vel_error = np.linalg.norm(pred_future_velocities[s] - true_future_velocities[s])
+                position_errors_all.append(pos_error)
+                velocity_errors_all.append(vel_error)
+        
+        # 转换为numpy数组
+        position_errors_all = np.array(position_errors_all)
+        velocity_errors_all = np.array(velocity_errors_all)
+        
+        # 计算统计量
+        results[steps] = {
+            'position': {
+                'mean_error': np.mean(position_errors_all),
+                'std_error': np.std(position_errors_all),
+                'max_error': np.max(position_errors_all)
+            },
+            'velocity': {
+                'mean_error': np.mean(velocity_errors_all),
+                'std_error': np.std(velocity_errors_all),
+                'max_error': np.max(velocity_errors_all)
+            }
+        }
+    
+    return results
+
+def save_mpc_errors_to_csv(results, filename, method_name):
+    """
+    将MPC的位置和速度误差保存到CSV文件
+    
+    Args:
+        results: 包含误差数据的字典
+        filename: 输出CSV文件名
+        method_name: 方法名称（用于标识）
+    """
+    import pandas as pd
+    
+    # 准备数据
+    data = []
+    predict_steps_list = sorted(results.keys())
+    
+    # 添加位置误差行
+    position_row = {'Metric': 'Position'}
+    for steps in predict_steps_list:
+        position_row[f'{steps}_steps_mean'] = results[steps]['position']['mean_error']
+        position_row[f'{steps}_steps_std'] = results[steps]['position']['std_error']
+        position_row[f'{steps}_steps_max'] = results[steps]['position']['max_error']
+    data.append(position_row)
+    
+    # 添加速度误差行
+    velocity_row = {'Metric': 'Velocity'}
+    for steps in predict_steps_list:
+        velocity_row[f'{steps}_steps_mean'] = results[steps]['velocity']['mean_error']
+        velocity_row[f'{steps}_steps_std'] = results[steps]['velocity']['std_error']
+        velocity_row[f'{steps}_steps_max'] = results[steps]['velocity']['max_error']
+    data.append(velocity_row)
+    
+    # 创建DataFrame并保存
+    df = pd.DataFrame(data)
+    df.to_csv(filename, index=False)
+    print(f"\n{method_name} position and velocity errors saved to '{filename}'")
+
 if __name__ == "__main__":
     # nn_prediction()
     # identify_human()
     # MPC_prediction()
-    visualization()
+    # visualization()
+
+    nn_prediction_with_vector_errors()
+    # calculate_mpc_position_velocity_errors()

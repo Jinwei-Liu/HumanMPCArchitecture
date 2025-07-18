@@ -274,7 +274,8 @@ def draw_results():
     plot_state_3d(state_array,
             store_predict_array,
             hold_u_x_array,
-            gate_positions)
+            gate_positions,
+            save_path=args.visualization_save_path.replace('.npz', '.pdf'))
     
     # Create lists to store error data for both models
     steps_list = [5, 10, 20, 30, 40, 50]

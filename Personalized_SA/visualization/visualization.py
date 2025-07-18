@@ -9,136 +9,136 @@ def plot_state_3d(state_array,
                   gate_positions,
                   figsize_mm=(83, 70),
                   dpi=300,
-                  elev=90, azim=-90,
+                  elev=70, azim=-90.001,
                   save_path=None,
                   show=True):
     """
     Nature/Science 风格的 3D 轨迹散点图（带连线版）
     """
-    # -------- 1. 纯 ASCII 的 rcParams --------
+    # 设置样式
     rc_params = {
-        "font.family"      : "Arial",
-        "font.size"        : 7.5,
-        "axes.linewidth"   : 0.6,
-        "axes.labelsize"   : 8,
-        "axes.labelpad"    : 2,
-        "xtick.major.size" : 3,
-        "xtick.major.width": 0.5,
-        "ytick.major.size" : 3,
-        "ytick.major.width": 0.5,
+        "font.family": "Arial", "font.size": 7.5, "axes.linewidth": 0.6,
+        "axes.labelsize": 8, "axes.labelpad": 2, "xtick.major.size": 3,
+        "xtick.major.width": 0.5, "ytick.major.size": 3, "ytick.major.width": 0.5,
+        "xtick.labelsize": 5, "ytick.labelsize": 5
     }
     mpl.rcParams.update(rc_params)
 
-    # -------- 2. 颜色 --------
-    c_obs, c_pred, c_control = "#4C72B0", "#DD8452", "#55A868"
-    c_gate = "#7F7F7F"
-    c_face = "#FFFFFF"
+    # 颜色定义
+    c_obs, c_pred, c_control, c_gate, c_face = "#4C72B0", "#DD8452", "#55A868", "#7F7F7F", "#FFFFFF"
 
-    # -------- 3. 数据整理 --------
-    state_array         = np.asarray(state_array)
+    # 数据转换
+    state_array = np.asarray(state_array)
     store_predict_array = np.asarray(store_predict_array)
-    hold_u_x_array      = np.asarray(hold_u_x_array)
+    hold_u_x_array = np.asarray(hold_u_x_array)
+    gate_positions = np.asarray(gate_positions[:-1,:])
 
-    # -------- 4. 画布 --------
+    # 创建图形
     w, h = figsize_mm
     fig = plt.figure(figsize=(w/25.4, h/25.4), dpi=dpi)
-    ax  = fig.add_subplot(111, projection="3d")
+    ax = fig.add_subplot(111, projection="3d")
 
-    # 观测轨迹（散点 + 连线）
+    # 观测轨迹
     ax.scatter(state_array[:, 0], state_array[:, 1], state_array[:, 2],
-               c=c_obs, s=7, marker="o", edgecolors="none", alpha=0.85,
-               label="Observed")
-    ax.plot(state_array[:, 0], state_array[:, 1], state_array[:, 2],
-            c=c_obs, lw=0.7, alpha=0.9)
+               c=c_obs, s=7, marker="o", edgecolors="none", alpha=0.85, label="Observed")
+    ax.plot(state_array[:, 0], state_array[:, 1], state_array[:, 2], c=c_obs, lw=0.7, alpha=0.9)
 
-    # # 预测轨迹（散点 + 连线）
-    # ax.scatter(store_predict_array[::20, :15, 0].ravel(),
-    #            store_predict_array[::20, :15, 1].ravel(),
-    #            store_predict_array[::20, :15, 2].ravel(),
-    #            c=c_pred, s=6, marker="^", edgecolors="none", alpha=0.70,
-    #            label="Predicted")
-    # # 对每一条预测序列画线
-    # for traj in store_predict_array[::20, :15]:
-    #     ax.plot(traj[:, 0], traj[:, 1], traj[:, 2],
-    #             c=c_pred, lw=0.6, alpha=0.65)
+    # 预测轨迹（注释掉，保留以便后续使用）
+    ax.scatter(store_predict_array[::20, :15, 0].ravel(),
+               store_predict_array[::20, :15, 1].ravel(),
+               store_predict_array[::20, :15, 2].ravel(),
+               c=c_pred, s=6, marker="^", edgecolors="none", alpha=0.70, label="Predicted")
+    for traj in store_predict_array[::20, :15]:
+        ax.plot(traj[:, 0], traj[:, 1], traj[:, 2], c=c_pred, lw=0.6, alpha=0.65)
 
-    # # 控制轨迹（可选：散点 + 连线）
-    # ax.scatter(hold_u_x_array[::20, :15, 0].ravel(),
-    #             hold_u_x_array[::20, :15, 1].ravel(),
-    #             hold_u_x_array[::20, :15, 2].ravel(),
-    #             c=c_control, s=6, marker="s", edgecolors="none", alpha=0.65,
-    #             label="Control")
-    # for traj in hold_u_x_array[::20, :15]:
-    #     ax.plot(traj[:, 0], traj[:, 1], traj[:, 2],
-    #             c=c_control, lw=0.6, alpha=0.55)
+    # 控制轨迹（注释掉，保留以便后续使用）
+    ax.scatter(hold_u_x_array[::20, :15, 0].ravel(),
+               hold_u_x_array[::20, :15, 1].ravel(),
+               hold_u_x_array[::20, :15, 2].ravel(),
+               c=c_control, s=6, marker="s", edgecolors="none", alpha=0.65, label="Control")
+    for traj in hold_u_x_array[::20, :15]:
+        ax.plot(traj[:, 0], traj[:, 1], traj[:, 2], c=c_control, lw=0.6, alpha=0.55)
     
-    # -------- 添加门 --------
-    if len(gate_positions) > 0:
-        # 门的尺寸参数
-        gate_width = 1.5
-        gate_height = 1.5
+    # 标记起点
+    ax.scatter(
+        state_array[0, 0], state_array[0, 1], state_array[0, 2],
+        c="green",             # 绿色表示起点
+        s=30,                  # 点的大小
+        marker="o",            # 圆形标记
+        edgecolors="k",        # 黑色边框
+        linewidths=0.8,
+        label="Start"
+    )
+    # 标记结束点
+    ax.scatter(
+        state_array[-1, 0], state_array[-1, 1], state_array[-1, 2],
+        c="red",               # 红色表示终点
+        s=30,
+        marker="X",            # X 形标记
+        edgecolors="k",
+        linewidths=0.8,
+        label="End"
+    )
+
+    # 绘制门
+    if gate_positions.size > 0: 
+        from mpl_toolkits.mplot3d.art3d import Poly3DCollection
+        gate_width = gate_height = 1.5
         gate_depth = 0.5
 
-        from mpl_toolkits.mplot3d.art3d import Poly3DCollection
-        
-        # 绘制每个门
-        for gate_pos in gate_positions:
-            x, y, z = gate_pos
-            
-            # 创建门的顶点 - 垂直立方体
-            vertices = [
-                # 前面
+        for x, y, z in gate_positions:
+            # 创建立方体顶点
+            v = [
                 [x-gate_width/2, y-gate_depth/2, z-gate_height/2],
                 [x+gate_width/2, y-gate_depth/2, z-gate_height/2],
                 [x+gate_width/2, y-gate_depth/2, z+gate_height/2],
                 [x-gate_width/2, y-gate_depth/2, z+gate_height/2],
-                # 后面
                 [x-gate_width/2, y+gate_depth/2, z-gate_height/2],
                 [x+gate_width/2, y+gate_depth/2, z-gate_height/2],
                 [x+gate_width/2, y+gate_depth/2, z+gate_height/2],
                 [x-gate_width/2, y+gate_depth/2, z+gate_height/2]
             ]
             
-            # 定义每个面的顶点索引
-            faces = [
-                [0, 1, 2, 3],  # 前面
-                [4, 5, 6, 7],  # 后面
-                [0, 3, 7, 4],  # 左面
-                [1, 2, 6, 5],  # 右面
-                [0, 1, 5, 4],  # 下面
-                [3, 2, 6, 7]   # 上面
-            ]
+            # # 定义面
+            # faces = [[0,1,2,3], [4,5,6,7], [0,3,7,4], [1,2,6,5], [0,1,5,4], [3,2,6,7]]
+            # poly3d = [[v[idx] for idx in face] for face in faces]
             
-            # 创建3D多边形集合
-            poly3d = [[vertices[idx] for idx in face] for face in faces]
-            gate = Poly3DCollection(poly3d, alpha=0.1, linewidths=1, edgecolors=c_gate)
-            gate.set_facecolor(c_face)
-            ax.add_collection3d(gate)
+            # gate = Poly3DCollection(poly3d, alpha=0.1, linewidths=1, edgecolors=c_gate)
+            # gate.set_facecolor(c_face)
+            # ax.add_collection3d(gate)
             
-            # 添加门框架的线条以增强立体感
-            edges = [
-                # 垂直边
-                [0, 3], [1, 2], [4, 7], [5, 6],
-                # 水平边
-                [0, 1], [3, 2], [4, 5], [7, 6],
-                # 深度边
-                [0, 4], [1, 5], [2, 6], [3, 7]
-            ]
-            
+            # 添加边框
+            edges = [[0,3],[1,2],[4,7],[5,6],[0,1],[3,2],[4,5],[7,6],[0,4],[1,5],[2,6],[3,7]]
             for edge in edges:
-                ax.plot3D(
-                    [vertices[edge[0]][0], vertices[edge[1]][0]],
-                    [vertices[edge[0]][1], vertices[edge[1]][1]],
-                    [vertices[edge[0]][2], vertices[edge[1]][2]],
-                    color=c_gate, linewidth=1
-                )
+                ax.plot3D([v[edge[0]][0], v[edge[1]][0]], 
+                         [v[edge[0]][1], v[edge[1]][1]], 
+                         [v[edge[0]][2], v[edge[1]][2]], 
+                         color=c_gate, linewidth=1)
 
-    # -------- 5. 坐标轴 --------
-    ax.set_xlim(-10, 10); ax.set_ylim(-1, 20); ax.set_zlim(-10, 10)
-    ax.set_xlabel("X position"); ax.set_ylabel("Y position"); ax.set_zlabel("Z position")
+    # 坐标轴设置
+    ax.set_xlim(-5, 5); ax.set_ylim(-1, 20); ax.set_zlim(-5, 5)
+    ax.set_xticks([-5, -2.5, 0, 2.5, 5])
+    ax.set_zticks([-5, -2.5, 0, 2.5, 5])
+    
+    # 解决坐标轴标签位置问题
+    ax.set_xlabel('X Label',labelpad=-13)
+    ax.set_ylabel('Y Label',labelpad=2)
+    ax.set_zlabel('Z Label',labelpad=-3)
+    
+    # 调整刻度标签位置
+    ax.tick_params(axis='x', pad=-5)
+    ax.tick_params(axis='y', pad=2)
+    ax.tick_params(axis='z', pad=-1)
+    
+    ax.set_xlabel("X [m]", fontsize=5)
+    ax.set_ylabel("Y [m]", fontsize=5)
+    ax.set_zlabel("Z [m]", fontsize=5)
+    ax.set_proj_type('ortho')
 
-    try: ax.set_box_aspect((1, 1, 1))
-    except AttributeError: pass
+    try: 
+        ax.set_box_aspect((0.5, 1, 1))
+    except AttributeError: 
+        pass
 
     ax.view_init(elev=elev, azim=azim)
 
@@ -147,7 +147,7 @@ def plot_state_3d(state_array,
         pane.set_edgecolor("w")
         pane.set_facecolor((1,1,1,0))
 
-    # 可选：手动设置 z 轴刻度线宽度
+    # 设置z轴刻度线
     for t in ax.zaxis.get_major_ticks():
         t.tick1line.set_markeredgewidth(0.5)
         t.tick2line.set_markeredgewidth(0.5)
@@ -155,11 +155,18 @@ def plot_state_3d(state_array,
         t.tick2line.set_markersize(3)
 
     ax.legend(frameon=False, loc="upper right", fontsize=7)
+    # ax.legend(loc='lower center', 
+    #     bbox_to_anchor=(0, -1),
+    #     ncol=5, 
+    #     fontsize=7,
+    #     frameon=True,
+    #     fancybox=True,
+    #     shadow=True)
+    
     plt.tight_layout(pad=0.2)
 
-    if save_path is not None:
+    if save_path:
         fig.savefig(save_path, dpi=dpi, bbox_inches="tight")
-
     if show:
         plt.show()
 
@@ -282,7 +289,7 @@ def create_comparison_plot(threshold_vel=1):
     plt.subplots_adjust(top=0.82)  # 为legend留出空间
     
     # 添加主标题
-    plt.suptitle(f'Comparison of Different Methods (Threshold Velocity = {threshold_vel})', 
+    plt.suptitle(f'(a)', 
                  fontsize=16, fontweight='bold', y=0.98)
     
     # 保存图片

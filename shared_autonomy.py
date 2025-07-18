@@ -447,7 +447,7 @@ def test_assistive_mpc_integration():
             pass
         
         # 6. 环境步进
-        obs_dict, reward, done, info = env.step(env_act)
+        obs_dict, _, done, _ = env.step(env_act)
         next_state = obs_dict["human"]
         
         # 记录历史
