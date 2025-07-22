@@ -112,7 +112,7 @@ class AssistiveMPC:
             obj += ca.mtimes([x_error.T, Q_x, x_error])
             
             # 3. 控制努力项: ||u_t+k||²_R_m2 (控制输入正则化)
-            Q_u_reg = ca.diag(self.ctrl_weights * 0.1)  # 较小权重
+            Q_u_reg = ca.diag(self.ctrl_weights * 0)  # 较小权重
             obj += ca.mtimes([U[:, k].T, Q_u_reg, U[:, k]])
             
             # 动力学约束: x_t+k+1 = f(x_t+k, u_t+k)
@@ -557,5 +557,394 @@ def test_assistive_mpc_integration():
         plt.tight_layout()
         plt.show()
 
+
+import numpy as np
+import matplotlib.pyplot as plt
+from tqdm import tqdm
+import collections
+
+def evaluate_assistive_performance(num_episodes=100, intervention_threshold=0.2, max_steps=1000):
+    """
+    评估有/无机器辅助的性能对比
+    
+    Args:
+        num_episodes: 仿真轮数
+        intervention_threshold: 介入阈值（动作改变超过此比例算作介入）
+        max_steps: 每轮最大步数
+    
+    Returns:
+        dict: 包含所有统计指标的字典
+    """
+    
+    def scale_to_env(a_norm, action_low, action_high):
+        return (a_norm + 1.0) / 2.0 * (action_high - action_low) + action_low
+    
+    def compute_energy_consumption(action):
+        """计算能量消耗 - 使用动作的二范数平方"""
+        return np.sum(action**2)
+    
+    def compute_action_magnitude(action):
+        """计算动作大小 - 使用二范数"""
+        return np.linalg.norm(action)
+    
+    def compute_distance_to_obstacle(position, obstacle_pos):
+        """计算到障碍物的距离"""
+        return np.linalg.norm(position - obstacle_pos)
+    
+    def is_intervention(human_action, machine_action, threshold):
+        """判断是否发生介入"""
+        relative_change = np.linalg.norm(machine_action - human_action) / (np.linalg.norm(human_action) + 1e-8)
+        return relative_change > threshold
+    
+    # 初始化统计数据
+    results = {
+        # 无辅助情况
+        'no_assist': {
+            'success_rate': 0,
+            'min_obstacle_distances': [],
+            'avg_action_magnitude': [],
+            'avg_energy_consumption': [],
+            'episode_lengths': [],
+            'final_gate_indices': []
+        },
+        # 有辅助情况  
+        'with_assist': {
+            'success_rate': 0,
+            'min_obstacle_distances': [],
+            'avg_action_magnitude': [],
+            'avg_energy_consumption': [],
+            'intervention_frequencies': [],
+            'avg_intervention_magnitude': [],
+            'episode_lengths': [],
+            'final_gate_indices': []
+        }
+    }
+    
+    print("开始评估性能...")
+    print(f"总仿真轮数: {num_episodes}")
+    print(f"介入阈值: {intervention_threshold}")
+    
+    # === 初始化系统组件 ===
+    from Personalized_SA.env.quadrotor_env import QuadrotorRaceEnv
+    from shared_autonomy_history import RLHuman, HumanMPC
+    from Personalized_SA.config.config import args
+
+    env = QuadrotorRaceEnv(dt=0.01)  # 不使用可视化
+    action_low = env.action_space["low"]
+    action_high = env.action_space["high"]
+    state_dim = env.observation_dim_human
+    action_dim = action_low.shape[0]
+    
+    rlhuman = RLHuman(state_dim, action_dim)
+    humanmodel = HumanMPC(goal_weights=args.goal_weights,
+                         ctrl_weights=args.ctrl_weights, T_HORIZON=15)
+    
+    # 创建AssistiveMPC
+    assistivempc = AssistiveMPC(
+        goal_weights=[1,1,1,1,1,1,1,1,1,1],
+        ctrl_weights=[1,1,1,1],
+        T_HORIZON=15,
+        cbf_gamma=0.1
+    )
+    
+    # === 运行无辅助仿真 ===
+    print("\n=== 运行无辅助仿真 ===")
+    no_assist_successes = 0
+    global_min_obstacle_dist_no_assist = float('inf')  # 全局最小障碍物距离
+    
+    for episode in tqdm(range(num_episodes), desc="无辅助"):
+        # 重置环境
+        obs_dict, _ = env.reset(seed=episode)
+        machine_state = obs_dict["machine"]
+        state = obs_dict["human"]
+        
+        # 记录该轮的统计数据
+        min_obstacle_dist = float('inf')
+        action_magnitudes = []
+        energy_consumptions = []
+        
+        # 无辅助情况不需要维护历史记录
+        
+        done = False
+        step_count = 0
+        crash = False
+
+        while not done and step_count < max_steps:
+            # 1. RL生成动作
+            a_norm = rlhuman.select_action(state, deterministic=False, temperature=1)
+            env_act = scale_to_env(a_norm, action_low, action_high)
+            
+            # 2. 直接执行原始人类动作（无辅助，无需预测）
+            obs_dict, _, done, info = env.step(env_act)
+            next_state = obs_dict["human"]
+            
+            # 3. 统计数据
+            current_pos = state[:3]
+            obstacle_pos = machine_state[-3:]  # 障碍物位置
+            dist_to_obstacle = compute_distance_to_obstacle(current_pos, obstacle_pos)
+
+            if dist_to_obstacle < 1:
+                crash = True
+
+            min_obstacle_dist = min(min_obstacle_dist, dist_to_obstacle)
+            
+            action_magnitudes.append(compute_action_magnitude(env_act))
+            energy_consumptions.append(compute_energy_consumption(env_act))
+            
+            state = next_state
+            step_count += 1
+        
+        # 4. 记录该轮结果
+        if done and info.get('termination') == 'all_gates_passed' and not crash:
+            no_assist_successes += 1
+            
+        results['no_assist']['min_obstacle_distances'].append(min_obstacle_dist)
+        global_min_obstacle_dist_no_assist = min(global_min_obstacle_dist_no_assist, min_obstacle_dist)  # 更新全局最小值
+        results['no_assist']['avg_action_magnitude'].append(np.mean(action_magnitudes))
+        results['no_assist']['avg_energy_consumption'].append(np.mean(energy_consumptions))
+        results['no_assist']['episode_lengths'].append(step_count)
+        results['no_assist']['final_gate_indices'].append(env.current_gate_idx)
+    
+    results['no_assist']['success_rate'] = no_assist_successes / num_episodes
+    
+    # === 运行有辅助仿真 ===
+    print("\n=== 运行有辅助仿真 ===")
+    with_assist_successes = 0
+    global_min_obstacle_dist_with_assist = float('inf')  # 全局最小障碍物距离
+    
+    for episode in tqdm(range(num_episodes), desc="有辅助"):
+        # 重置环境
+        obs_dict, _ = env.reset(seed=episode)  # 使用相同种子确保公平对比
+        machine_state = obs_dict["machine"]
+        state = obs_dict["human"]
+        
+        # 为AssistiveMPC添加障碍物
+        assistivempc.obstacles = []  # 清空之前的障碍物
+        obstacle_pos = machine_state[-3:]
+        assistivempc.add_obstacle(x_obs=obstacle_pos[0], y_obs=obstacle_pos[1], 
+                                z_obs=obstacle_pos[2], radius=1.0)
+        
+        # 记录该轮的统计数据
+        min_obstacle_dist = float('inf')
+        action_magnitudes = []
+        energy_consumptions = []
+        interventions = []
+        intervention_magnitudes = []
+        
+        # 初始化历史
+        states = collections.deque([state[:10]] * 3, maxlen=3)
+        actions = collections.deque([np.zeros(action_dim)] * 3, maxlen=3)
+        
+        done = False
+        step_count = 0
+        crash = False
+        
+        while not done and step_count < max_steps:
+            # 1. RL生成动作
+            a_norm = rlhuman.select_action(state, deterministic=False, temperature=1)
+            human_action = scale_to_env(a_norm, action_low, action_high)
+            
+            # 2. 更新历史
+            states.append(state[:10])
+            actions.append(human_action)
+            
+            # 3. 人类模型预测
+            aim_goal = humanmodel.run(np.array(states), np.array(actions))
+            x, u = humanmodel.step(state[:10], aim_goal)
+            x = np.squeeze(x, axis=1)
+            u = np.squeeze(u, axis=1)
+            
+            # 4. AssistiveMPC生成辅助动作
+            try:
+                mpc_horizon = assistivempc.T_HORIZON
+                human_states_mpc = x[:mpc_horizon]
+                human_actions_mpc = np.tile(human_action, (mpc_horizon, 1))
+                
+                assistive_action = assistivempc.run(
+                    machine_state=state[:10],
+                    human_actions=human_actions_mpc,
+                    human_states=human_states_mpc,
+                )
+                
+                # 5. 判断是否介入
+                is_intervened = is_intervention(human_action, assistive_action, intervention_threshold)
+                interventions.append(is_intervened)
+                
+                if is_intervened:
+                    intervention_magnitude = np.linalg.norm(assistive_action - human_action)
+                    intervention_magnitudes.append(intervention_magnitude)
+                
+                # 使用辅助动作
+                final_action = assistive_action
+                
+            except Exception as e:
+                # MPC失败时使用原始人类动作
+                interventions.append(False)
+                final_action = human_action
+            
+            # 6. 执行动作
+            obs_dict, _, done, info = env.step(final_action)
+            next_state = obs_dict["human"]
+            
+            # 7. 统计数据
+            current_pos = state[:3]
+            dist_to_obstacle = compute_distance_to_obstacle(current_pos, obstacle_pos)
+
+            if dist_to_obstacle < 1:
+                crash = True
+
+            min_obstacle_dist = min(min_obstacle_dist, dist_to_obstacle)
+            
+            action_magnitudes.append(compute_action_magnitude(final_action))
+            energy_consumptions.append(compute_energy_consumption(final_action))
+            
+            state = next_state
+            step_count += 1
+        
+        # 8. 记录该轮结果
+        if done and info.get('termination') == 'all_gates_passed' and not crash:
+            with_assist_successes += 1
+            
+        results['with_assist']['min_obstacle_distances'].append(min_obstacle_dist)
+        global_min_obstacle_dist_with_assist = min(global_min_obstacle_dist_with_assist, min_obstacle_dist)  # 更新全局最小值
+        results['with_assist']['avg_action_magnitude'].append(np.mean(action_magnitudes))
+        results['with_assist']['avg_energy_consumption'].append(np.mean(energy_consumptions))
+        results['with_assist']['intervention_frequencies'].append(np.mean(interventions))
+        results['with_assist']['avg_intervention_magnitude'].append(
+            np.mean(intervention_magnitudes) if intervention_magnitudes else 0.0
+        )
+        results['with_assist']['episode_lengths'].append(step_count)
+        results['with_assist']['final_gate_indices'].append(env.current_gate_idx)
+    
+    results['with_assist']['success_rate'] = with_assist_successes / num_episodes
+    
+    # === 计算汇总统计 ===
+    print("\n" + "="*50)
+    print("=== 仿真结果汇总 ===")
+    print("="*50)
+    
+    # 无辅助结果
+    print(f"\n【无辅助结果】")
+    print(f"成功轮数: {no_assist_successes}/{num_episodes}")
+    print(f"成功率: {results['no_assist']['success_rate']:.3f}")
+    print(f"平均最近障碍物距离: {np.mean(results['no_assist']['min_obstacle_distances']):.3f}m")
+    print(f"全局最小障碍物距离: {global_min_obstacle_dist_no_assist:.3f}m")
+    print(f"平均动作大小: {np.mean(results['no_assist']['avg_action_magnitude']):.3f}")
+    print(f"平均能量消耗: {np.mean(results['no_assist']['avg_energy_consumption']):.3f}")
+    print(f"平均仿真步数: {np.mean(results['no_assist']['episode_lengths']):.1f}")
+    print(f"平均最终门数: {np.mean(results['no_assist']['final_gate_indices']):.2f}/{env.num_gates}")
+    
+    # 有辅助结果
+    print(f"\n【有辅助结果】")
+    print(f"成功轮数: {with_assist_successes}/{num_episodes}")
+    print(f"成功率: {results['with_assist']['success_rate']:.3f}")
+    print(f"平均最近障碍物距离: {np.mean(results['with_assist']['min_obstacle_distances']):.3f}m")
+    print(f"全局最小障碍物距离: {global_min_obstacle_dist_with_assist:.3f}m")
+    print(f"平均动作大小: {np.mean(results['with_assist']['avg_action_magnitude']):.3f}")
+    print(f"平均能量消耗: {np.mean(results['with_assist']['avg_energy_consumption']):.3f}")
+    print(f"平均介入频率: {np.mean(results['with_assist']['intervention_frequencies']):.3f}")
+    print(f"平均介入动作大小: {np.mean(results['with_assist']['avg_intervention_magnitude']):.3f}")
+    print(f"平均仿真步数: {np.mean(results['with_assist']['episode_lengths']):.1f}")
+    print(f"平均最终门数: {np.mean(results['with_assist']['final_gate_indices']):.2f}/{env.num_gates}")
+    
+    print("\n" + "="*50)
+    print("=== 性能对比总结 ===")
+    print("="*50)
+    print(f"{'指标':<20} {'无辅助':<15} {'有辅助':<15} {'改进':<15}")
+    print("-" * 65)
+    print(f"{'成功率':<20} {results['no_assist']['success_rate']:<15.3f} {results['with_assist']['success_rate']:<15.3f} {results['with_assist']['success_rate'] - results['no_assist']['success_rate']:+.3f}")
+    print(f"{'平均最近障碍距离':<20} {np.mean(results['no_assist']['min_obstacle_distances']):<15.3f} {np.mean(results['with_assist']['min_obstacle_distances']):<15.3f} {np.mean(results['with_assist']['min_obstacle_distances']) - np.mean(results['no_assist']['min_obstacle_distances']):+.3f}")
+    print(f"{'全局最小障碍距离':<20} {global_min_obstacle_dist_no_assist:<15.3f} {global_min_obstacle_dist_with_assist:<15.3f} {global_min_obstacle_dist_with_assist - global_min_obstacle_dist_no_assist:+.3f}")
+    print(f"{'平均动作大小':<20} {np.mean(results['no_assist']['avg_action_magnitude']):<15.3f} {np.mean(results['with_assist']['avg_action_magnitude']):<15.3f} {np.mean(results['with_assist']['avg_action_magnitude']) - np.mean(results['no_assist']['avg_action_magnitude']):+.3f}")
+    print(f"{'平均能量消耗':<20} {np.mean(results['no_assist']['avg_energy_consumption']):<15.3f} {np.mean(results['with_assist']['avg_energy_consumption']):<15.3f} {np.mean(results['with_assist']['avg_energy_consumption']) - np.mean(results['no_assist']['avg_energy_consumption']):+.3f}")
+    print("-" * 65)
+    print(f"平均介入频率: {np.mean(results['with_assist']['intervention_frequencies']):.3f}")
+    print(f"平均介入动作大小: {np.mean(results['with_assist']['avg_intervention_magnitude']):.3f}")
+    print(f"介入阈值设置: {intervention_threshold}")
+    print("="*50)
+    
+    # 添加汇总统计到结果中
+    results['summary'] = {
+        'success_rate_improvement': results['with_assist']['success_rate'] - results['no_assist']['success_rate'],
+        'avg_min_obstacle_dist_no_assist': np.mean(results['no_assist']['min_obstacle_distances']),
+        'avg_min_obstacle_dist_with_assist': np.mean(results['with_assist']['min_obstacle_distances']),
+        'global_min_obstacle_dist_no_assist': global_min_obstacle_dist_no_assist,
+        'global_min_obstacle_dist_with_assist': global_min_obstacle_dist_with_assist,
+        'avg_action_magnitude_no_assist': np.mean(results['no_assist']['avg_action_magnitude']),
+        'avg_action_magnitude_with_assist': np.mean(results['with_assist']['avg_action_magnitude']),
+        'avg_energy_consumption_no_assist': np.mean(results['no_assist']['avg_energy_consumption']),
+        'avg_energy_consumption_with_assist': np.mean(results['with_assist']['avg_energy_consumption']),
+        'avg_intervention_frequency': np.mean(results['with_assist']['intervention_frequencies']),
+        'avg_intervention_magnitude': np.mean(results['with_assist']['avg_intervention_magnitude']),
+        'intervention_threshold': intervention_threshold
+    }
+    
+    return results
+
+def plot_evaluation_results(results):
+    """绘制评估结果的可视化图表"""
+    fig, ((ax1, ax2), (ax3, ax4)) = plt.subplots(2, 2, figsize=(15, 10))
+    
+    # 1. 成功率对比
+    categories = ['No Assist', 'With Assist']
+    success_rates = [results['no_assist']['success_rate'], results['with_assist']['success_rate']]
+    bars1 = ax1.bar(categories, success_rates, color=['lightblue', 'lightgreen'])
+    ax1.set_ylabel('Success Rate')
+    ax1.set_title('Success Rate Comparison')
+    ax1.set_ylim(0, 1)
+    for i, v in enumerate(success_rates):
+        ax1.text(i, v + 0.01, f'{v:.3f}', ha='center', va='bottom')
+    
+    # 2. 最近障碍物距离分布
+    ax2.hist(results['no_assist']['min_obstacle_distances'], alpha=0.7, label='No Assist', bins=20)
+    ax2.hist(results['with_assist']['min_obstacle_distances'], alpha=0.7, label='With Assist', bins=20)
+    
+    # 添加全局最小值的垂直线
+    global_min_no_assist = results['summary']['global_min_obstacle_dist_no_assist']
+    global_min_with_assist = results['summary']['global_min_obstacle_dist_with_assist']
+    ax2.axvline(global_min_no_assist, color='blue', linestyle='--', 
+                label=f'No Assist Global Min: {global_min_no_assist:.3f}m')
+    ax2.axvline(global_min_with_assist, color='orange', linestyle='--',
+                label=f'With Assist Global Min: {global_min_with_assist:.3f}m')
+    
+    ax2.set_xlabel('Minimum Obstacle Distance (m)')
+    ax2.set_ylabel('Frequency')
+    ax2.set_title('Minimum Obstacle Distance Distribution')
+    ax2.legend()
+    
+    # 3. 能量消耗对比
+    energy_data = [results['no_assist']['avg_energy_consumption'], 
+                   results['with_assist']['avg_energy_consumption']]
+    bp = ax3.boxplot(energy_data, labels=['No Assist', 'With Assist'])
+    ax3.set_ylabel('Average Energy Consumption')
+    ax3.set_title('Energy Consumption Distribution')
+    
+    # 4. 介入统计
+    intervention_freq = results['with_assist']['intervention_frequencies']
+    intervention_mag = results['with_assist']['avg_intervention_magnitude']
+    
+    ax4_twin = ax4.twinx()
+    bars4_1 = ax4.bar(range(len(intervention_freq)), intervention_freq, alpha=0.7, 
+                     color='orange', label='Intervention Frequency')
+    bars4_2 = ax4_twin.bar(range(len(intervention_mag)), intervention_mag, alpha=0.7, 
+                          color='red', label='Intervention Magnitude')
+    
+    ax4.set_xlabel('Episode')
+    ax4.set_ylabel('Intervention Frequency', color='orange')
+    ax4_twin.set_ylabel('Intervention Magnitude', color='red')
+    ax4.set_title('Intervention Frequency and Magnitude')
+    
+    plt.tight_layout()
+    plt.show()
+
 if __name__ == "__main__":
-    test_assistive_mpc_integration()
+    # 运行评估
+    results = evaluate_assistive_performance(
+        num_episodes=20,            # 仿真轮数
+        intervention_threshold=0.2, # 介入阈值 
+        max_steps=5000             # 每轮最大步数
+    )
+    
+    # 绘制结果
+    plot_evaluation_results(results)
+    # test_assistive_mpc_integration()
