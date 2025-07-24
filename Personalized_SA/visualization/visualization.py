@@ -43,21 +43,21 @@ def plot_state_3d(state_array,
                c=c_obs, s=7, marker="o", edgecolors="none", alpha=0.85, label="Observed")
     ax.plot(state_array[:, 0], state_array[:, 1], state_array[:, 2], c=c_obs, lw=0.7, alpha=0.9)
 
-    # 预测轨迹（注释掉，保留以便后续使用）
-    ax.scatter(store_predict_array[::20, :15, 0].ravel(),
-               store_predict_array[::20, :15, 1].ravel(),
-               store_predict_array[::20, :15, 2].ravel(),
-               c=c_pred, s=6, marker="^", edgecolors="none", alpha=0.70, label="Predicted")
-    for traj in store_predict_array[::20, :15]:
-        ax.plot(traj[:, 0], traj[:, 1], traj[:, 2], c=c_pred, lw=0.6, alpha=0.65)
+    # # 预测轨迹（注释掉，保留以便后续使用）
+    # ax.scatter(store_predict_array[::20, :15, 0].ravel(),
+    #            store_predict_array[::20, :15, 1].ravel(),
+    #            store_predict_array[::20, :15, 2].ravel(),
+    #            c=c_pred, s=6, marker="^", edgecolors="none", alpha=0.70, label="Predicted")
+    # for traj in store_predict_array[::20, :15]:
+    #     ax.plot(traj[:, 0], traj[:, 1], traj[:, 2], c=c_pred, lw=0.6, alpha=0.65)
 
-    # 控制轨迹（注释掉，保留以便后续使用）
-    ax.scatter(hold_u_x_array[::20, :15, 0].ravel(),
-               hold_u_x_array[::20, :15, 1].ravel(),
-               hold_u_x_array[::20, :15, 2].ravel(),
-               c=c_control, s=6, marker="s", edgecolors="none", alpha=0.65, label="Control")
-    for traj in hold_u_x_array[::20, :15]:
-        ax.plot(traj[:, 0], traj[:, 1], traj[:, 2], c=c_control, lw=0.6, alpha=0.55)
+    # # 控制轨迹（注释掉，保留以便后续使用）
+    # ax.scatter(hold_u_x_array[::20, :15, 0].ravel(),
+    #            hold_u_x_array[::20, :15, 1].ravel(),
+    #            hold_u_x_array[::20, :15, 2].ravel(),
+    #            c=c_control, s=6, marker="s", edgecolors="none", alpha=0.65, label="Control")
+    # for traj in hold_u_x_array[::20, :15]:
+    #     ax.plot(traj[:, 0], traj[:, 1], traj[:, 2], c=c_control, lw=0.6, alpha=0.55)
     
     # 标记起点
     ax.scatter(

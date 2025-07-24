@@ -50,17 +50,16 @@ class QuadrotorRaceEnv:
             # [-4.0, 4.0, 2.0],
             [0.0, 0.0, 0.0]
         ], dtype=np.float32)
-        self.noise_bounds = np.array([
-            [-0.5, 0.5],  
-            [-0.5, 0.5], 
-            [-0.5, 0.5] 
-        ])
         # self.noise_bounds = np.array([
-        #     [-0.0, 0.0],  
-        #     [-0.0, 0.0], 
-        #     [-0.0, 0.0] 
+        #     [-0.5, 0.5],  
+        #     [-0.5, 0.5], 
+        #     [-0.5, 0.5] 
         # ])
-
+        self.noise_bounds = np.array([
+            [-0.0, 0.0],  
+            [-0.0, 0.0], 
+            [-0.0, 0.0] 
+        ])
 
         # obstacle positions
         self.obstacle_positions = np.array([0, 6, 1], dtype=np.float32)

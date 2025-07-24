@@ -937,14 +937,329 @@ def plot_evaluation_results(results):
     plt.tight_layout()
     plt.show()
 
+
+def evaluate_different_cbf_gammas(cbf_gamma_list=[0.05, 0.1, 0.2, 0.5], 
+                                  num_episodes=10, 
+                                  max_steps=1000,
+                                  intervention_threshold=0.2):
+    """
+    评估不同cbf_gamma值的效果
+    
+    Args:
+        cbf_gamma_list: 要测试的cbf_gamma值列表
+        num_episodes: 每个gamma值的测试轮数
+        max_steps: 每轮最大步数
+        intervention_threshold: 介入阈值
+    
+    Returns:
+        dict: 包含所有gamma值结果的字典
+    """
+    
+    # 复用现有函数
+    def scale_to_env(a_norm, action_low, action_high):
+        return (a_norm + 1.0) / 2.0 * (action_high - action_low) + action_low
+    
+    def is_intervention(human_action, machine_action, threshold):
+        """判断是否发生介入"""
+        relative_change = np.linalg.norm(machine_action - human_action) / (np.linalg.norm(human_action) + 1e-8)
+        return relative_change > threshold
+    
+    # 初始化环境和模型
+    from Personalized_SA.env.quadrotor_env import QuadrotorRaceEnv
+    from shared_autonomy_history import RLHuman, HumanMPC
+    
+    env = QuadrotorRaceEnv(dt=0.01)
+    action_low = env.action_space["low"]
+    action_high = env.action_space["high"]
+    state_dim = env.observation_dim_human
+    action_dim = action_low.shape[0]
+    
+    rlhuman = RLHuman(state_dim, action_dim)
+    humanmodel = HumanMPC(goal_weights=args.goal_weights,
+                         ctrl_weights=args.ctrl_weights, T_HORIZON=15)
+    
+    # 存储所有结果
+    all_results = {}
+    
+    # 对每个cbf_gamma值进行测试
+    for gamma in cbf_gamma_list:
+        print(f"\n=== 测试 cbf_gamma = {gamma} ===")
+        
+        # 创建新的AssistiveMPC实例
+        assistivempc = AssistiveMPC(
+            goal_weights=[1,1,1,1,1,1,1,1,1,1],
+            ctrl_weights=[1,1,1,1],
+            T_HORIZON=15,
+            cbf_gamma=gamma
+        )
+        
+        # 存储该gamma的结果
+        gamma_results = {
+            'trajectories': [],  # 存储每个episode的轨迹
+            'interventions': [],  # 存储介入信息
+            'min_obstacle_distances': [],
+            'success_count': 0
+        }
+        
+        # 运行多个episode
+        for episode in tqdm(range(num_episodes), desc=f"gamma={gamma}"):
+            # 重置环境
+            obs_dict, _ = env.reset(seed=episode)
+            machine_state = obs_dict["machine"]
+            state = obs_dict["human"]
+            
+            # 添加障碍物
+            assistivempc.obstacles = []
+            obstacle_pos = machine_state[-3:]
+            assistivempc.add_obstacle(x_obs=obstacle_pos[0], y_obs=obstacle_pos[1], 
+                                    z_obs=obstacle_pos[2], radius=1.0)
+            
+            # 存储轨迹和介入数据
+            trajectory = []
+            intervention_data = []
+            min_obstacle_dist = float('inf')
+            
+            # 初始化历史
+            states = collections.deque([state[:10]] * 3, maxlen=3)
+            actions = collections.deque([np.zeros(action_dim)] * 3, maxlen=3)
+            
+            done = False
+            step_count = 0
+            crash = False
+            
+            while not done and step_count < max_steps:
+                # 1. RL生成动作
+                a_norm = rlhuman.select_action(state, deterministic=False, temperature=1)
+                human_action = scale_to_env(a_norm, action_low, action_high)
+                
+                # 2. 更新历史
+                states.append(state[:10])
+                actions.append(human_action)
+                
+                # 3. 人类模型预测
+                aim_goal = humanmodel.run(np.array(states), np.array(actions))
+                x, u = humanmodel.step(state[:10], aim_goal)
+                x = np.squeeze(x, axis=1)
+                u = np.squeeze(u, axis=1)
+                
+                # 4. AssistiveMPC
+                try:
+                    mpc_horizon = assistivempc.T_HORIZON
+                    human_states_mpc = x[:mpc_horizon]
+                    human_actions_mpc = np.tile(human_action, (mpc_horizon, 1))
+                    
+                    assistive_action = assistivempc.run(
+                        machine_state=state[:10],
+                        human_actions=human_actions_mpc,
+                        human_states=human_states_mpc,
+                    )
+                    
+                    # 计算介入大小
+                    is_intervened = is_intervention(human_action, assistive_action, intervention_threshold)
+                    intervention_magnitude = np.linalg.norm(assistive_action - human_action) if is_intervened else 0.0
+                    
+                    final_action = assistive_action
+                    
+                except Exception as e:
+                    intervention_magnitude = 0.0
+                    final_action = human_action
+                
+                # 5. 执行动作
+                obs_dict, _, done, info = env.step(final_action)
+                next_state = obs_dict["human"]
+                
+                # 6. 记录数据
+                current_pos = state[:3].copy()
+                trajectory.append({
+                    'x': current_pos[0],
+                    'y': current_pos[1],
+                    'z': current_pos[2],
+                    'intervention_magnitude': intervention_magnitude
+                })
+                
+                # 计算到障碍物的距离
+                dist_to_obstacle = np.linalg.norm(current_pos - obstacle_pos)
+                if dist_to_obstacle < 1:
+                    crash = True
+                min_obstacle_dist = min(min_obstacle_dist, dist_to_obstacle)
+                
+                state = next_state
+                step_count += 1
+            
+            # 记录episode结果
+            gamma_results['trajectories'].append(trajectory)
+            gamma_results['min_obstacle_distances'].append(min_obstacle_dist)
+            if done and info.get('termination') == 'all_gates_passed' and not crash:
+                gamma_results['success_count'] += 1
+        
+        gamma_results['success_rate'] = gamma_results['success_count'] / num_episodes
+        all_results[gamma] = gamma_results
+        
+        print(f"cbf_gamma={gamma}: 成功率={gamma_results['success_rate']:.3f}, "
+              f"平均最小障碍距离={np.mean(gamma_results['min_obstacle_distances']):.3f}")
+    
+    return all_results
+
+def plot_cbf_gamma_comparison(results, cbf_gamma_list):
+    """
+    绘制不同cbf_gamma的对比结果
+    创建一个4行的竖向图：x位置、y位置、z位置、介入大小
+    """
+    # 设置颜色映射
+    colors = plt.cm.viridis(np.linspace(0, 1, len(cbf_gamma_list)))
+    
+    # 创建4行1列的子图
+    fig, (ax1, ax2, ax3, ax4) = plt.subplots(4, 1, figsize=(12, 16), sharex=True)
+    
+    # 为每个cbf_gamma绘制结果
+    for idx, gamma in enumerate(cbf_gamma_list):
+        gamma_data = results[gamma]
+        
+        # 选择第一个成功的轨迹进行展示（或者可以选择平均轨迹）
+        if gamma_data['trajectories']:
+            # 使用第一个轨迹作为示例
+            trajectory = gamma_data['trajectories'][0]
+            
+            # 提取数据
+            steps = range(len(trajectory))
+            x_positions = [t['x'] for t in trajectory]
+            y_positions = [t['y'] for t in trajectory]
+            z_positions = [t['z'] for t in trajectory]
+            interventions = [t['intervention_magnitude'] for t in trajectory]
+            
+            # 绘制x位置
+            ax1.plot(steps, x_positions, color=colors[idx], 
+                    label=f'γ={gamma}', linewidth=2, alpha=0.8)
+            
+            # 绘制y位置
+            ax2.plot(steps, y_positions, color=colors[idx], 
+                    linewidth=2, alpha=0.8)
+            
+            # 绘制z位置
+            ax3.plot(steps, z_positions, color=colors[idx], 
+                    linewidth=2, alpha=0.8)
+            
+            # 绘制介入大小
+            ax4.plot(steps, interventions, color=colors[idx], 
+                    linewidth=2, alpha=0.8)
+    
+    # 设置标签和标题
+    ax1.set_ylabel('X Position (m)', fontsize=12)
+    ax1.set_title('Quadrotor Trajectory Comparison with Different CBF-γ Values', fontsize=14)
+    ax1.grid(True, alpha=0.3)
+    ax1.legend(loc='best')
+    
+    ax2.set_ylabel('Y Position (m)', fontsize=12)
+    ax2.grid(True, alpha=0.3)
+    
+    ax3.set_ylabel('Z Position (m)', fontsize=12)
+    ax3.grid(True, alpha=0.3)
+    
+    ax4.set_ylabel('Intervention Magnitude', fontsize=12)
+    ax4.set_xlabel('Time Steps', fontsize=12)
+    ax4.grid(True, alpha=0.3)
+    
+    # 调整布局
+    plt.tight_layout()
+    
+    # 添加性能统计信息
+    textstr = '\n'.join([f'γ={gamma}: Success Rate={results[gamma]["success_rate"]:.2f}, '
+                        f'Avg Min Dist={np.mean(results[gamma]["min_obstacle_distances"]):.2f}m'
+                        for gamma in cbf_gamma_list])
+    
+    # 在图的右侧添加文本框
+    props = dict(boxstyle='round', facecolor='wheat', alpha=0.5)
+    fig.text(0.02, 0.98, textstr, transform=fig.transFigure, fontsize=10,
+            verticalalignment='top', bbox=props)
+    
+    plt.show()
+
+def plot_cbf_gamma_statistics(results, cbf_gamma_list):
+    """
+    绘制不同cbf_gamma的统计对比图
+    """
+    fig, ((ax1, ax2), (ax3, ax4)) = plt.subplots(2, 2, figsize=(15, 10))
+    
+    # 1. 成功率对比
+    success_rates = [results[gamma]['success_rate'] for gamma in cbf_gamma_list]
+    bars1 = ax1.bar(range(len(cbf_gamma_list)), success_rates, 
+                    color=plt.cm.viridis(np.linspace(0, 1, len(cbf_gamma_list))))
+    ax1.set_xlabel('CBF γ')
+    ax1.set_ylabel('Success Rate')
+    ax1.set_title('Success Rate vs CBF γ')
+    ax1.set_xticks(range(len(cbf_gamma_list)))
+    ax1.set_xticklabels([f'{gamma}' for gamma in cbf_gamma_list])
+    for i, v in enumerate(success_rates):
+        ax1.text(i, v + 0.01, f'{v:.2f}', ha='center', va='bottom')
+    
+    # 2. 平均最小障碍物距离
+    avg_min_distances = [np.mean(results[gamma]['min_obstacle_distances']) 
+                        for gamma in cbf_gamma_list]
+    ax2.plot(cbf_gamma_list, avg_min_distances, 'o-', markersize=10, linewidth=2)
+    ax2.set_xlabel('CBF γ')
+    ax2.set_ylabel('Average Minimum Obstacle Distance (m)')
+    ax2.set_title('Safety Performance vs CBF γ')
+    ax2.grid(True, alpha=0.3)
+    
+    # 3. 最小障碍物距离分布（箱线图）
+    distance_data = [results[gamma]['min_obstacle_distances'] for gamma in cbf_gamma_list]
+    bp = ax3.boxplot(distance_data, labels=[f'γ={gamma}' for gamma in cbf_gamma_list])
+    ax3.set_ylabel('Minimum Obstacle Distance (m)')
+    ax3.set_title('Distribution of Minimum Obstacle Distances')
+    ax3.grid(True, alpha=0.3)
+    
+    # 4. 介入频率热力图（如果有多个episode）
+    if len(results[cbf_gamma_list[0]]['trajectories']) > 1:
+        intervention_matrix = []
+        for gamma in cbf_gamma_list:
+            gamma_interventions = []
+            for traj in results[gamma]['trajectories'][:5]:  # 只显示前5个episode
+                avg_intervention = np.mean([t['intervention_magnitude'] for t in traj])
+                gamma_interventions.append(avg_intervention)
+            intervention_matrix.append(gamma_interventions)
+        
+        im = ax4.imshow(intervention_matrix, aspect='auto', cmap='YlOrRd')
+        ax4.set_yticks(range(len(cbf_gamma_list)))
+        ax4.set_yticklabels([f'γ={gamma}' for gamma in cbf_gamma_list])
+        ax4.set_xlabel('Episode')
+        ax4.set_ylabel('CBF γ')
+        ax4.set_title('Average Intervention Magnitude Heatmap')
+        plt.colorbar(im, ax=ax4)
+    
+    plt.tight_layout()
+    plt.show()
+
+
 if __name__ == "__main__":
-    # 运行评估
-    results = evaluate_assistive_performance(
-        num_episodes=20,            # 仿真轮数
-        intervention_threshold=0.2, # 介入阈值 
-        max_steps=5000             # 每轮最大步数
+    # test_assistive_mpc_integration()
+
+
+    # # 运行评估
+    # results = evaluate_assistive_performance(
+    #     num_episodes=20,            # 仿真轮数
+    #     intervention_threshold=0.2, # 介入阈值 
+    #     max_steps=5000             # 每轮最大步数
+    # )
+    
+    # # 绘制结果
+    # plot_evaluation_results(results)
+
+
+    # 测试不同的cbf_gamma值
+    cbf_gamma_list = [0.05, 0.1, 0.2, 0.5]
+    
+    print("开始测试不同的CBF-γ值...")
+    results = evaluate_different_cbf_gammas(
+        cbf_gamma_list=cbf_gamma_list,
+        num_episodes=1,  # 每个gamma测试5轮
+        max_steps=5000,
+        intervention_threshold=0.2
     )
     
-    # 绘制结果
-    plot_evaluation_results(results)
-    # test_assistive_mpc_integration()
+    # 绘制轨迹对比图
+    print("\n绘制轨迹对比图...")
+    plot_cbf_gamma_comparison(results, cbf_gamma_list)
+    
+    # 绘制统计对比图
+    print("\n绘制统计对比图...")
+    plot_cbf_gamma_statistics(results, cbf_gamma_list)
