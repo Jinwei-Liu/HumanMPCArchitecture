@@ -452,7 +452,7 @@ def cal_error_h(true_states, predict_states, predict_steps):
 
 from shared_autonomy_history import *
 def MPC_prediction():
-    selected_timestamp = 1
+    selected_timestamp = 0
     timestamps = get_available_state_files()
     states, actions = read_states(timestamps[selected_timestamp])
     
@@ -473,9 +473,9 @@ def MPC_prediction():
     fig.tight_layout()
     plt.show()
 
-    humanmodel = HumanMPC(goal_weights= [0.86067986, 0.91357833, 1.3121516, 0.63025314, 0.5201712, 0.60911137,
-                                          0.7222595, 0.03662273, 0.04287567, -0.19597986],
-                          ctrl_weights= [0.93935597, 0.9478975,  0.94227266, 0.95469636], T_HORIZON=100)
+    humanmodel = HumanMPC(goal_weights= [0.81286556, 0.9012254, 1.1674333, 0.8097155, 0.38300148, 0.57644385,
+                                          0.89060897, 0.03772579, -0.07379231, 0.15307042],
+                          ctrl_weights= [0.9389819, 0.9773094, 0.9737562, 1.016077], T_HORIZON=100)
 
     step_idx = 0
     state = states[0]
@@ -536,10 +536,6 @@ def MPC_prediction():
     hold_u_x_array = data['hold_u_x_array']
     gate_positions = data['gate_positions']
 
-    plot_state_3d(state_array,
-            store_predict_array,
-            hold_u_x_array,
-            gate_positions)
     
     # Create lists to store error data for both models
     steps_list = [5, 10, 20, 30, 40, 50, 60, 70, 80, 90, 100]
@@ -1059,8 +1055,8 @@ def save_mpc_errors_to_csv(results, filename, method_name):
 if __name__ == "__main__":
     # nn_prediction()
     # identify_human()
-    # MPC_prediction()
+    MPC_prediction()
     # visualization()
 
-    nn_prediction_with_vector_errors()
+    # nn_prediction_with_vector_errors()
     # calculate_mpc_position_velocity_errors()

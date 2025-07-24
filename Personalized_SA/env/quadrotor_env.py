@@ -40,20 +40,30 @@ class QuadrotorRaceEnv:
         self.gate_radius = 0.5
         self.current_gate_idx = 0
         self.gate_positions_raw = np.array([
-            [2.0, 2.0, 2.0],
-            [-2.0, 7.0, 2.0],
-            [2.0, 12.0, 2.0],
-            [-2.0, 17.0, 2.0],
-            [0.0, 20.0, 2.0]
+            [4.0, 4.0, 2.0],
+            [-4.0, 12.0, 2.0],
+            [4.0, 12.0, 2.0],
+            [-4.0, 4.0, 2.0],
+            # [4.0, 4.0, 2.0],
+            # [-4.0, 12.0, 2.0],
+            # [4.0, 12.0, 2.0],
+            # [-4.0, 4.0, 2.0],
+            [0.0, 0.0, 0.0]
         ], dtype=np.float32)
         self.noise_bounds = np.array([
             [-0.5, 0.5],  
             [-0.5, 0.5], 
-            [-2.0, 2.0] 
+            [-0.5, 0.5] 
         ])
+        # self.noise_bounds = np.array([
+        #     [-0.0, 0.0],  
+        #     [-0.0, 0.0], 
+        #     [-0.0, 0.0] 
+        # ])
+
 
         # obstacle positions
-        self.obstacle_positions = np.array([1.5, 2.0, 1.5], dtype=np.float32)
+        self.obstacle_positions = np.array([0, 6, 1], dtype=np.float32)
 
         # Visualization handles
         self.gate_ids = []
@@ -76,7 +86,7 @@ class QuadrotorRaceEnv:
             self.quadrotor_id = None
 
         # Safety bounds
-        self.pos_bounds = np.array([-5.0, 20.0], dtype=np.float32)
+        self.pos_bounds = np.array([-20.0, 20.0], dtype=np.float32)
         self.vel_bounds = np.array([-100.0, 100.0], dtype=np.float32)
 
         # Reward coefficients
