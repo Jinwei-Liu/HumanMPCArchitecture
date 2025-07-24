@@ -1056,7 +1056,7 @@ def evaluate_different_cbf_gammas(cbf_gamma_list=[0.05, 0.1, 0.2, 0.5],
                     
                     # 计算介入大小
                     is_intervened = is_intervention(human_action, assistive_action, intervention_threshold)
-                    intervention_magnitude = np.linalg.norm(assistive_action - human_action) if is_intervened else 0.0
+                    intervention_magnitude = np.linalg.norm(assistive_action - human_action)
                     
                     final_action = assistive_action
                     
@@ -1246,7 +1246,7 @@ if __name__ == "__main__":
 
 
     # 测试不同的cbf_gamma值
-    cbf_gamma_list = [0.05, 0.1, 0.2, 0.5]
+    cbf_gamma_list = [0.05, 0.1, 0.3, 0.5]
     
     print("开始测试不同的CBF-γ值...")
     results = evaluate_different_cbf_gammas(

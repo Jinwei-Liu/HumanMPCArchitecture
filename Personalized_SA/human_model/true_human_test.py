@@ -1055,8 +1055,8 @@ def save_mpc_errors_to_csv(results, filename, method_name):
 if __name__ == "__main__":
     # nn_prediction()
     # identify_human()
-    MPC_prediction()
+    # MPC_prediction()
     # visualization()
 
     # nn_prediction_with_vector_errors()
-    # calculate_mpc_position_velocity_errors()
+    calculate_mpc_position_velocity_errors()
