@@ -1105,73 +1105,78 @@ def plot_cbf_gamma_comparison(results, cbf_gamma_list):
     绘制不同cbf_gamma的对比结果
     创建一个4行的竖向图：x位置、y位置、z位置、介入大小
     """
-    # 设置颜色映射
-    colors = plt.cm.viridis(np.linspace(0, 1, len(cbf_gamma_list)))
+    if 'dt' in results:
+        dt = results['dt']
+        xlabel = 'Time (s)'
+    else:
+        dt = 1 # 如果没有提供dt，则默认时间步长为1
+        xlabel = 'Time Steps'
+
+    # 使用高对比度的颜色
+        colors = [
+        '#FF0000',  # 红色
+        "#058805",  # 绿色
+        '#FFA600',  # 黄色
+    ]
+    if len(cbf_gamma_list) > len(colors):
+        colors = plt.cm.viridis(np.linspace(0, 1, len(cbf_gamma_list)))
     
-    # 创建4行1列的子图
-    fig, (ax1, ax2, ax3, ax4) = plt.subplots(4, 1, figsize=(12, 16), sharex=True)
-    
-    # 为每个cbf_gamma绘制结果
+    # 您选择的 figsize
+    fig, (ax1, ax2, ax3, ax4) = plt.subplots(4, 1, figsize=(8, 6), sharex=True)
+
+    lines, labels = [], []
+
+    # 遍历数据并绘图
     for idx, gamma in enumerate(cbf_gamma_list):
-        gamma_data = results[gamma]
+        gamma_data = results.get(gamma)
+        if not gamma_data or not gamma_data.get('trajectories'):
+            continue
+            
+        trajectory = gamma_data['trajectories'][0]
+        num_steps = len(trajectory)
+        time_axis = np.arange(num_steps) * dt
         
-        # 选择第一个成功的轨迹进行展示（或者可以选择平均轨迹）
-        if gamma_data['trajectories']:
-            # 使用第一个轨迹作为示例
-            trajectory = gamma_data['trajectories'][0]
+        x_positions = [t['x'] for t in trajectory]
+        y_positions = [t['y'] for t in trajectory]
+        z_positions = [t['z'] for t in trajectory]
+        interventions = [t['intervention_magnitude'] for t in trajectory] 
             
-            # 提取数据
-            steps = range(len(trajectory))
-            x_positions = [t['x'] for t in trajectory]
-            y_positions = [t['y'] for t in trajectory]
-            z_positions = [t['z'] for t in trajectory]
-            interventions = [t['intervention_magnitude'] for t in trajectory]
+        label_text = f'γ={gamma}'
+
+        line, = ax1.plot(time_axis, x_positions, color=colors[idx], 
+                         label=label_text, linewidth=2)
+        ax2.plot(time_axis, y_positions, color=colors[idx], linewidth=2)
+        ax3.plot(time_axis, z_positions, color=colors[idx], linewidth=2)
+        
+        ax4.plot(time_axis, interventions, color=colors[idx], 
+                 marker='*', linestyle='None', markersize=5)
             
-            # 绘制x位置
-            ax1.plot(steps, x_positions, color=colors[idx], 
-                    label=f'γ={gamma}', linewidth=2, alpha=0.8)
-            
-            # 绘制y位置
-            ax2.plot(steps, y_positions, color=colors[idx], 
-                    linewidth=2, alpha=0.8)
-            
-            # 绘制z位置
-            ax3.plot(steps, z_positions, color=colors[idx], 
-                    linewidth=2, alpha=0.8)
-            
-            # 绘制介入大小
-            ax4.plot(steps, interventions, color=colors[idx], 
-                    linewidth=2, alpha=0.8)
+        lines.append(line)
+        labels.append(label_text)
+
+    # fig.suptitle('Quadrotor Trajectory Comparison for Different γ', fontsize=14, y=0.98)
+
+    ax1.set_ylabel('x (m)', fontsize=11, fontweight='bold')
+    ax1.grid(True, linestyle='--', alpha=0.6)
     
-    # 设置标签和标题
-    ax1.set_ylabel('X Position (m)', fontsize=12)
-    ax1.set_title('Quadrotor Trajectory Comparison with Different CBF-γ Values', fontsize=14)
-    ax1.grid(True, alpha=0.3)
-    ax1.legend(loc='best')
+    ax2.set_ylabel('y (m)', fontsize=11, fontweight='bold')
+    ax2.grid(True, linestyle='--', alpha=0.6)
     
-    ax2.set_ylabel('Y Position (m)', fontsize=12)
-    ax2.grid(True, alpha=0.3)
+    ax3.set_ylabel('z (m)', fontsize=11, fontweight='bold')
+    ax3.grid(True, linestyle='--', alpha=0.6)
     
-    ax3.set_ylabel('Z Position (m)', fontsize=12)
-    ax3.grid(True, alpha=0.3)
+    ax4.set_ylabel('Intervention', fontsize=11, fontweight='bold')
+    ax4.set_xlabel(xlabel, fontsize=11, fontweight='bold')
+    ax4.grid(True, linestyle='--', alpha=0.6)
     
-    ax4.set_ylabel('Intervention Magnitude', fontsize=12)
-    ax4.set_xlabel('Time Steps', fontsize=12)
-    ax4.grid(True, alpha=0.3)
+    for ax in [ax1, ax2, ax3, ax4]:
+        for spine in ax.spines.values():
+            spine.set_linewidth(1.5) 
+
+    # 调整图例
+    fig.legend(lines, labels, loc='upper center', bbox_to_anchor=(0.5, 0.96), ncol=len(cbf_gamma_list), frameon=False, fontsize=10)
     
-    # 调整布局
-    plt.tight_layout()
-    
-    # 添加性能统计信息
-    textstr = '\n'.join([f'γ={gamma}: Success Rate={results[gamma]["success_rate"]:.2f}, '
-                        f'Avg Min Dist={np.mean(results[gamma]["min_obstacle_distances"]):.2f}m'
-                        for gamma in cbf_gamma_list])
-    
-    # 在图的右侧添加文本框
-    props = dict(boxstyle='round', facecolor='wheat', alpha=0.5)
-    fig.text(0.02, 0.98, textstr, transform=fig.transFigure, fontsize=10,
-            verticalalignment='top', bbox=props)
-    
+    plt.tight_layout(rect=[0, 0, 1, 0.93]) 
     plt.show()
 
 def plot_cbf_gamma_statistics(results, cbf_gamma_list):
@@ -1268,24 +1273,24 @@ if __name__ == "__main__":
     # plot_evaluation_results(results)
 
 
-    # 测试不同的cbf_gamma值
-    cbf_gamma_list = [0.1, 0.15, 0.2, 0.25, 0.3, 0.35, 0.4]
+    # # 测试不同的cbf_gamma值
+    # cbf_gamma_list = [0.1, 0.15, 0.2, 0.25, 0.3, 0.35, 0.4]
     
-    print("开始测试不同的CBF-γ值...")
-    results = evaluate_different_cbf_gammas(
-        cbf_gamma_list=cbf_gamma_list,
-        num_episodes=5,  # 每个gamma测试5轮
-        max_steps=5000,
-        intervention_threshold=0.2
-    )
+    # print("开始测试不同的CBF-γ值...")
+    # results = evaluate_different_cbf_gammas(
+    #     cbf_gamma_list=cbf_gamma_list,
+    #     num_episodes=5,  # 每个gamma测试5轮
+    #     max_steps=5000,
+    #     intervention_threshold=0.2
+    # )
     
-    save_cbf_results(results, cbf_gamma_list, "cbf_results.pkl")
+    # save_cbf_results(results, cbf_gamma_list, "cbf_results.pkl")
 
     results, cbf_gamma_list = load_cbf_results("cbf_results.pkl")
 
     # 绘制轨迹对比图
     print("\n绘制轨迹对比图...")
-    plot_cbf_gamma_comparison(results, cbf_gamma_list)
+    plot_cbf_gamma_comparison(results, [0.1, 0.3, 0.5])
     
     # 绘制统计对比图
     print("\n绘制统计对比图...")
