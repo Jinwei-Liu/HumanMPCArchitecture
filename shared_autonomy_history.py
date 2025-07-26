@@ -345,5 +345,5 @@ def draw_results():
             writer.writerow(row)
 
 if __name__ == "__main__":
-    # main()
-    draw_results()
+    main()
+    # draw_results()

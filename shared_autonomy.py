@@ -112,7 +112,7 @@ class AssistiveMPC:
             obj += ca.mtimes([x_error.T, Q_x, x_error])
             
             # 3. 控制努力项: ||u_t+k||²_R_m2 (控制输入正则化)
-            Q_u_reg = ca.diag(self.ctrl_weights * 0)  # 较小权重
+            Q_u_reg = ca.diag(self.ctrl_weights * 0.1)  # 较小权重
             obj += ca.mtimes([U[:, k].T, Q_u_reg, U[:, k]])
             
             # 动力学约束: x_t+k+1 = f(x_t+k, u_t+k)
@@ -1229,6 +1229,29 @@ def plot_cbf_gamma_statistics(results, cbf_gamma_list):
     plt.tight_layout()
     plt.show()
 
+import pickle
+from pathlib import Path
+def save_cbf_results(results, cbf_gamma_list, file_path="cbf_results.pkl"):
+    """
+    将 evaluate_different_cbf_gammas 返回的 results 与 cbf_gamma_list 一并保存
+    """
+    file_path = Path(file_path).expanduser().resolve()
+    file_path.parent.mkdir(parents=True, exist_ok=True)   # 若目录不存在则创建
+    with file_path.open("wb") as f:
+        # 一起打包，后续读取更方便
+        pickle.dump({"results": results,
+                     "cbf_gamma_list": cbf_gamma_list}, f)
+    print(f"[√] 已保存到: {file_path}")
+
+def load_cbf_results(file_path="cbf_results.pkl"):
+    """
+    读取之前保存的结果，返回 (results, cbf_gamma_list)
+    """
+    file_path = Path(file_path).expanduser().resolve()
+    with file_path.open("rb") as f:
+        data = pickle.load(f)
+    print(f"[√] 已读取: {file_path}")
+    return data["results"], data["cbf_gamma_list"]
 
 if __name__ == "__main__":
     # test_assistive_mpc_integration()
@@ -1246,16 +1269,20 @@ if __name__ == "__main__":
 
 
     # 测试不同的cbf_gamma值
-    cbf_gamma_list = [0.05, 0.1, 0.3, 0.5]
+    cbf_gamma_list = [0.1, 0.15, 0.2, 0.25, 0.3, 0.35, 0.4]
     
     print("开始测试不同的CBF-γ值...")
     results = evaluate_different_cbf_gammas(
         cbf_gamma_list=cbf_gamma_list,
-        num_episodes=1,  # 每个gamma测试5轮
+        num_episodes=5,  # 每个gamma测试5轮
         max_steps=5000,
         intervention_threshold=0.2
     )
     
+    save_cbf_results(results, cbf_gamma_list, "cbf_results.pkl")
+
+    results, cbf_gamma_list = load_cbf_results("cbf_results.pkl")
+
     # 绘制轨迹对比图
     print("\n绘制轨迹对比图...")
     plot_cbf_gamma_comparison(results, cbf_gamma_list)
@@ -1263,3 +1290,4 @@ if __name__ == "__main__":
     # 绘制统计对比图
     print("\n绘制统计对比图...")
     plot_cbf_gamma_statistics(results, cbf_gamma_list)
+
