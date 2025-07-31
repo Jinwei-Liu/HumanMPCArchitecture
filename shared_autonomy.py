@@ -1258,9 +1258,50 @@ def load_cbf_results(file_path="cbf_results.pkl"):
     print(f"[√] 已读取: {file_path}")
     return data["results"], data["cbf_gamma_list"]
 
+def plot_obstacle_distance_distribution(results, cbf_gamma_list, figsize=(8, 6), dpi=300):
+    # 使用蓝色
+    blue_color = '#1f77b4'
+    
+    fig, ax = plt.subplots(figsize=figsize, dpi=dpi)
+    
+    # 提取数据
+    distance_data = [results[gamma]['min_obstacle_distances'] for gamma in cbf_gamma_list]
+    
+    # 创建箱线图
+    bp = ax.boxplot(distance_data, 
+                    labels=[f'γ={gamma}' for gamma in cbf_gamma_list],
+                    patch_artist=True)
+    
+    # 设置箱子颜色为统一蓝色
+    for patch in bp['boxes']:
+        patch.set_facecolor(blue_color)
+        patch.set_alpha(0.7)
+        patch.set_edgecolor('black')
+        patch.set_linewidth(1.2)
+    
+    # 设置中位线为黑色
+    for median in bp['medians']:
+        median.set_color('black')
+        median.set_linewidth(2)
+    
+    # 设置坐标轴标签（与您的风格一致）
+    ax.set_xlabel('CBF Safety Parameter (γ)', fontsize=11, fontweight='bold')
+    ax.set_ylabel('Minimum Obstacle Distance (m)', fontsize=11, fontweight='bold')
+    
+    # 添加网格（与您的风格一致）
+    ax.grid(True, linestyle='--', alpha=0.6)
+    
+    # 设置坐标轴边框线宽（与您的风格一致）
+    for spine in ax.spines.values():
+        spine.set_linewidth(1.5)
+    
+    plt.tight_layout()
+    plt.show()
+    
+    return fig, ax
+
 if __name__ == "__main__":
     # test_assistive_mpc_integration()
-
 
     # # 运行评估
     # results = evaluate_assistive_performance(
@@ -1296,3 +1337,4 @@ if __name__ == "__main__":
     print("\n绘制统计对比图...")
     plot_cbf_gamma_statistics(results, cbf_gamma_list)
 
+    plot_obstacle_distance_distribution(results, cbf_gamma_list)
