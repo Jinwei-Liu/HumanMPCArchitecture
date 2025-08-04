@@ -1300,6 +1300,157 @@ def plot_obstacle_distance_distribution(results, cbf_gamma_list, figsize=(8, 6),
     
     return fig, ax
 
+def plot_3d_trajectory_with_obstacles(results, cbf_gamma_list, obstacle_pos, obstacle_radius, episode_idx=0):
+    """
+    绘制3D轨迹图，包含障碍物可视化 - Nature期刊风格
+    
+    Args:
+        results: evaluate_different_cbf_gammas返回的结果字典
+        cbf_gamma_list: 要绘制的gamma值列表 (例如 [0.1, 0.3, 0.5])
+        obstacle_pos: 障碍物位置 [x, y, z]
+        obstacle_radius: 障碍物半径
+        episode_idx: 选择哪个episode的轨迹 (默认第一个)
+    """
+    import matplotlib.pyplot as plt
+    import numpy as np
+    
+    # Nature期刊风格设置
+    plt.rcParams.update({
+        'font.size': 9,
+        'font.family': 'Arial',
+        'axes.linewidth': 0.8,
+        'xtick.major.width': 0.8,
+        'ytick.major.width': 0.8,
+        'xtick.minor.width': 0.5,
+        'ytick.minor.width': 0.5
+    })
+    
+    # 高对比度颜色
+    colors = ['#FF0000', '#058805', '#FFA600', '#1f77b4', '#ff7f0e', '#2ca02c']
+    
+    # 更紧凑的图像尺寸
+    fig = plt.figure(figsize=(6, 5), dpi=200)
+    ax = fig.add_subplot(111, projection='3d')
+    
+    # 存储所有轨迹点用于设置坐标轴范围
+    all_x, all_y, all_z = [], [], []
+    
+    # 绘制每个gamma值的轨迹
+    for idx, gamma in enumerate(cbf_gamma_list):
+        if gamma not in results or not results[gamma].get('trajectories'):
+            continue
+            
+        if episode_idx >= len(results[gamma]['trajectories']):
+            continue
+            
+        trajectory = results[gamma]['trajectories'][episode_idx]
+        
+        # 提取轨迹点
+        x_pos = [t['x'] for t in trajectory]
+        y_pos = [t['y'] for t in trajectory]
+        z_pos = [t['z'] for t in trajectory]
+        
+        # 绘制轨迹 - 更细的线条
+        ax.plot(x_pos, y_pos, z_pos, color=colors[idx], linewidth=2.0, 
+               label=f'γ = {gamma}', alpha=0.9)
+        
+        # 更小的起点和终点标记
+        ax.scatter(x_pos[0], y_pos[0], z_pos[0], color=colors[idx], 
+                  s=40, marker='o', alpha=0.8, edgecolors='white', linewidth=0.5)
+        ax.scatter(x_pos[-1], y_pos[-1], z_pos[-1], color=colors[idx], 
+                  s=40, marker='s', alpha=0.8, edgecolors='white', linewidth=0.5)
+        
+        all_x.extend(x_pos)
+        all_y.extend(y_pos)
+        all_z.extend(z_pos)
+    
+    # 绘制球形障碍物 - 更精细
+    u = np.linspace(0, 2 * np.pi, 25)
+    v = np.linspace(0, np.pi, 25)
+    x_sphere = obstacle_radius * np.outer(np.cos(u), np.sin(v)) + obstacle_pos[0]
+    y_sphere = obstacle_radius * np.outer(np.sin(u), np.sin(v)) + obstacle_pos[1]
+    z_sphere = obstacle_radius * np.outer(np.ones(np.size(u)), np.cos(v)) + obstacle_pos[2]
+    
+    ax.plot_surface(x_sphere, y_sphere, z_sphere, alpha=0.5, color='#DC143C', 
+                   edgecolor='none', shade=True)
+    
+    # 设置坐标轴范围，Z轴限制在-0.5到2.5之间
+    all_x.extend([obstacle_pos[0] - obstacle_radius, obstacle_pos[0] + obstacle_radius])
+    all_y.extend([obstacle_pos[1] - obstacle_radius, obstacle_pos[1] + obstacle_radius])
+    all_z.extend([obstacle_pos[2] - obstacle_radius, obstacle_pos[2] + obstacle_radius])
+    
+    if all_x:
+        # 计算X和Y的范围
+        x_range = max(all_x) - min(all_x)
+        y_range = max(all_y) - min(all_y)
+        max_xy_range = max(x_range, y_range) / 2.0
+        
+        # 计算X和Y的中心点
+        x_center = (max(all_x) + min(all_x)) / 2.0
+        y_center = (max(all_y) + min(all_y)) / 2.0
+        
+        # 设置X和Y轴范围（等比例）
+        ax.set_xlim(x_center - max_xy_range, x_center + max_xy_range)
+        ax.set_ylim(y_center - max_xy_range, y_center + max_xy_range)
+        
+        # Z轴固定在-0.5到2.5之间
+        ax.set_zlim(-0.5, 2.5)
+        
+        # 设置轴的显示比例，让显示比例与真实数据比例一致
+        x_display_range = 2 * max_xy_range  # X轴的显示范围
+        y_display_range = 2 * max_xy_range  # Y轴的显示范围
+        z_display_range = 3  # Z轴的显示范围（-0.5到2.5）
+
+        # 设置box aspect使显示比例与数据比例一致
+        ax.set_box_aspect([x_display_range, y_display_range, z_display_range])
+    
+    # Nature风格的轴标签 - 减小labelpad使标签更靠近轴
+    ax.set_xlabel('X (m)', fontsize=10, labelpad=2)
+    ax.set_ylabel('Y (m)', fontsize=10, labelpad=2)
+    ax.set_zlabel('Z (m)', fontsize=10, labelpad=-5)
+    
+    # 设置刻度标签字体大小
+    ax.tick_params(axis='x', labelsize=8, pad=1)
+    ax.tick_params(axis='y', labelsize=8, pad=1)
+    ax.tick_params(axis='z', labelsize=8, pad=1)
+    
+    # 设置Z轴刻度为1m间隔
+    ax.set_zticks([0, 1, 2])
+    
+    # 调整图例位置到右上角
+    legend = ax.legend(loc='upper right', bbox_to_anchor=(0.98, 0.98), 
+                      fontsize=8, frameon=True, fancybox=False, 
+                      edgecolor='black', framealpha=0.9, 
+                      handlelength=1.2, handletextpad=0.3,
+                      columnspacing=0.5, borderpad=0.2)
+    legend.get_frame().set_facecolor('white')
+    legend.get_frame().set_linewidth(0.5)
+    
+    # 更淡的网格
+    ax.grid(True, alpha=0.2, linewidth=0.5)
+    
+    # 调整视角
+    ax.view_init(elev=30, azim=-30)
+    
+    # 去除轴的背景面板
+    ax.xaxis.pane.fill = False
+    ax.yaxis.pane.fill = False
+    ax.zaxis.pane.fill = False
+    
+    # 设置轴面板颜色为透明
+    ax.xaxis.pane.set_edgecolor('gray')
+    ax.yaxis.pane.set_edgecolor('gray')
+    ax.zaxis.pane.set_edgecolor('gray')
+    ax.xaxis.pane.set_alpha(0.1)
+    ax.yaxis.pane.set_alpha(0.1)
+    ax.zaxis.pane.set_alpha(0.1)
+    
+    # 紧凑布局
+    plt.tight_layout(pad=0.5)
+    plt.subplots_adjust(left=0.05, right=0.95, top=0.95, bottom=0.05)
+    plt.savefig('trajectory_3d.pdf') 
+    plt.show()
+
 if __name__ == "__main__":
     # test_assistive_mpc_integration()
 
@@ -1329,6 +1480,14 @@ if __name__ == "__main__":
 
     results, cbf_gamma_list = load_cbf_results("cbf_results.pkl")
 
+    plot_3d_trajectory_with_obstacles(
+    results, 
+    [0.1, 0.3, 0.5],           # 要绘制的gamma值
+    obstacle_pos=[0, 6, 1],    # 障碍物位置
+    obstacle_radius=1.0,       # 障碍物半径
+    episode_idx=0              # 选择第几个episode（可选，默认0）
+    )
+    
     # 绘制轨迹对比图
     print("\n绘制轨迹对比图...")
     plot_cbf_gamma_comparison(results, [0.1, 0.3, 0.5])
