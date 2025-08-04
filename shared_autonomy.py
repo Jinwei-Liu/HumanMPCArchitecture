@@ -1418,7 +1418,7 @@ def plot_3d_trajectory_with_obstacles(results, cbf_gamma_list, obstacle_pos, obs
     ax.set_zticks([0, 1, 2])
     
     # 调整图例位置到右上角
-    legend = ax.legend(loc='upper right', bbox_to_anchor=(0.98, 0.98), 
+    legend = ax.legend(loc='upper right', bbox_to_anchor=(0.98, 0.8), 
                       fontsize=8, frameon=True, fancybox=False, 
                       edgecolor='black', framealpha=0.9, 
                       handlelength=1.2, handletextpad=0.3,
@@ -1446,8 +1446,8 @@ def plot_3d_trajectory_with_obstacles(results, cbf_gamma_list, obstacle_pos, obs
     ax.zaxis.pane.set_alpha(0.1)
     
     # 紧凑布局
-    plt.tight_layout(pad=0.5)
-    plt.subplots_adjust(left=0.05, right=0.95, top=0.95, bottom=0.05)
+    plt.tight_layout(pad=0.01)
+    plt.subplots_adjust(left=0.00, right=0.99, top=0.99, bottom=0.02)
     plt.savefig('trajectory_3d.pdf') 
     plt.show()
 
